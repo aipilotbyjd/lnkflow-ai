@@ -54,3 +54,12 @@ vendor/
 
 # Logs
 *.log
+
+# SSL Certificates (NEVER commit)
+infra/nginx/ssl/*.pem
+infra/nginx/ssl/*.key
+infra/nginx/ssl/*.crt
+!infra/nginx/ssl/.gitkeep
+
+# Docker
+docker-data/

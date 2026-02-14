@@ -1,15 +1,13 @@
 # LinkFlow API - Docker Compose
-# Connects to external 'linkflow' network (start infrastructure first)
+# Works standalone (start infra first) or via root include
 #
-# Prerequisites:
-#   1. Start infrastructure: cd ../infrastructure && docker-compose up -d
-#   2. Copy env file: cp .env.docker.example .env.docker (first time only)
+# Standalone:
+#   cd infra && docker-compose up -d    # Start Postgres + Redis first
+#   docker-compose up -d                # Start API + Queue
+#   docker-compose --profile full up -d # Start all (including scheduler)
 #
-# Usage:
-#   docker-compose up -d                    # Start API + Queue
-#   docker-compose --profile full up -d     # Start all (including scheduler)
-#   docker-compose logs -f                  # View logs
-#   docker-compose exec api php artisan migrate  # Run migrations
+# Full stack (from project root):
+#   docker-compose up -d                # Everything via include
 
 services:
   # ============================================
@@ -27,9 +25,9 @@ services:
     env_file:
       - .env.docker
     environment:
-      # Override for Docker networking
       DB_HOST: linkflow-postgres
       REDIS_HOST: linkflow-redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
       ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
       REDIS_QUEUE: workflows-default
@@ -38,16 +36,16 @@ services:
     networks:
       - linkflow
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ============================================
   # Queue Worker
@@ -64,13 +62,14 @@ services:
     environment:
       DB_HOST: linkflow-postgres
       REDIS_HOST: linkflow-redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
       ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
     volumes:
       - .:/var/www/html
-    command: php artisan queue:work redis --queue=workflows-high,workflows-default,workflows-low,default --sleep=3 --tries=3 --max-time=3600 --verbose
+    command: php artisan queue:work redis --queue=workflows-high,workflows-default,workflows-low,default --sleep=3 --tries=3 --max-time=3600 --max-jobs=1000 --verbose
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep -v grep | grep 'queue:work' || exit 1"]
+      test: [ "CMD-SHELL", "ps aux | grep -v grep | grep 'queue:work' || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -78,10 +77,13 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     networks:
       - linkflow
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ============================================
   # Scheduler (Cron) - Optional
@@ -98,6 +100,7 @@ services:
     environment:
       DB_HOST: linkflow-postgres
       REDIS_HOST: linkflow-redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
       ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
     volumes:
@@ -105,11 +108,11 @@ services:
     command: >
       sh -c "while true; do php artisan schedule:run --verbose; sleep 60; done"
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep -v grep | grep 'schedule:run' || exit 1"]
-      interval: 30s
+      test: [ "CMD-SHELL", "pgrep -f 'schedule:run|sleep' || exit 1" ]
+      interval: 60s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
     depends_on:
       api:
         condition: service_healthy
@@ -117,9 +120,13 @@ services:
       - linkflow
     profiles:
       - full
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   linkflow:
     name: linkflow
     driver: bridge
-    # external: true # Commented out for Monorepo Root compatibility

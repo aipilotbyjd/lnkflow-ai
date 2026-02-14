@@ -1,0 +1,40 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Environment files (NEVER ship to image)
+.env
+.env.*
+!.env.example
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies (rebuilt inside container)
+vendor/
+node_modules/
+
+# Testing
+tests/
+phpunit.xml
+.phpunit.result.cache
+
+# Docker (avoid recursive copy)
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Documentation
+*.md
+
+# Logs & Cache (runtime only)
+storage/logs/*
+bootstrap/cache/*

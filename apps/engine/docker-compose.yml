@@ -1,19 +1,17 @@
 # LinkFlow Go Engine - Complete Stack
 # All 8 microservices for full workflow execution engine
 #
-# Prerequisites:
-#   1. Start infrastructure first: cd ../infrastructure && docker-compose up -d
+# Standalone:
+#   cd infra && docker-compose up -d    # Start Postgres + Redis first
+#   docker-compose up -d                # Start core services
+#   docker-compose --profile edge up -d # Include edge service
 #
-# Usage:
-#   docker-compose up -d                    # Start all services
-#   docker-compose logs -f                  # View logs
-#   docker-compose down                     # Stop all
+# Full stack (from project root):
+#   docker-compose up -d                # Everything via include
 
-x-common-env:
-  # SECURITY: SSL mode set to 'prefer' - upgrade to 'require' or 'verify-full' for production
-  &common-env
-  DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:-linkflow}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer&search_path=workflow
-  REDIS_URL: redis://linkflow-redis:6379
+x-common-env: &common-env
+  DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer&search_path=workflow
+  REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@linkflow-redis:6379
   LOG_LEVEL: ${LOG_LEVEL:-info}
   LOG_FORMAT: json
 
@@ -21,16 +19,16 @@ x-common-config: &common-config
   restart: unless-stopped
   networks:
     - linkflow
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   # ============================================
   # 1. FRONTEND SERVICE - API Gateway
   # ============================================
-  # Purpose: Entry point for all client requests
-  # - Request routing to internal services
-  # - Authentication & authorization
-  # - Rate limiting
-  # - Load balancing
   frontend:
     build:
       context: .
@@ -40,24 +38,19 @@ services:
     container_name: linkflow-frontend
     <<: *common-config
     ports:
-      - "8080:8080" # HTTP API
-      - "9090:9090" # gRPC API
+      - "8080:8080"
+      - "9090:9090"
     environment:
       <<: *common-env
       SERVICE_NAME: frontend
       HTTP_PORT: 8080
       GRPC_PORT: 9090
-      # Internal service addresses
       HISTORY_ADDR: linkflow-history:7234
       MATCHING_ADDR: linkflow-matching:7235
       VISIBILITY_ADDR: linkflow-visibility:7237
-      # Auth - SECURITY: These MUST be set via environment variables
-      # Generate a strong secret: openssl rand -base64 32
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET environment variable is required (min 32 chars)}
-      # Rate limiting
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
       RATE_LIMIT_REQUESTS: 1000
       RATE_LIMIT_WINDOW: 60s
-      # Redis job consumer
       ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
       JOB_CONSUMER_GROUP: engine-group
       JOB_CLAIM_MIN_IDLE: 30s
@@ -77,11 +70,6 @@ services:
   # ============================================
   # 2. HISTORY SERVICE - Event Sourcing
   # ============================================
-  # Purpose: Stores all workflow events
-  # - Event store (append-only log)
-  # - Mutable state (current execution state)
-  # - Sharding for scale
-  # - Replay capability
   history:
     build:
       context: .
@@ -91,18 +79,15 @@ services:
     container_name: linkflow-history
     <<: *common-config
     ports:
-      - "8081:8080" # HTTP
-      - "7234:7234" # gRPC (internal)
+      - "8081:8080"
+      - "7234:7234"
     environment:
       <<: *common-env
       SERVICE_NAME: history
       GRPC_PORT: 7234
       HTTP_PORT: 8080
-      # Sharding
       SHARD_COUNT: 16
-      # Matching service
       MATCHING_ADDR: linkflow-matching:7235
-      # Timer service
       TIMER_ADDR: linkflow-timer:7238
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8080/health" ]
@@ -114,11 +99,6 @@ services:
   # ============================================
   # 3. MATCHING SERVICE - Task Queue
   # ============================================
-  # Purpose: Routes tasks to workers
-  # - Task queue management
-  # - Long polling for workers
-  # - Priority handling
-  # - Load distribution
   matching:
     build:
       context: .
@@ -128,16 +108,14 @@ services:
     container_name: linkflow-matching
     <<: *common-config
     ports:
-      - "8082:8080" # HTTP
-      - "7235:7235" # gRPC (internal)
+      - "8082:8080"
+      - "7235:7235"
     environment:
       <<: *common-env
       SERVICE_NAME: matching
       GRPC_PORT: 7235
       HTTP_PORT: 8080
-      # Partitioning
       PARTITION_COUNT: 4
-      # Task queue config
       TASK_QUEUE_SYNC_INTERVAL: 1s
       LONG_POLL_TIMEOUT: 60s
     healthcheck:
@@ -150,11 +128,6 @@ services:
   # ============================================
   # 4. WORKER SERVICE - Node Executor
   # ============================================
-  # Purpose: Executes workflow nodes
-  # - HTTP, AI, Email, Database executions
-  # - Retry logic with circuit breakers
-  # - Connection pooling
-  # - Credential resolution
   worker:
     build:
       context: .
@@ -164,24 +137,18 @@ services:
     container_name: linkflow-worker
     <<: *common-config
     ports:
-      - "8083:8080" # HTTP (metrics/health)
+      - "8083:8080"
     environment:
       <<: *common-env
       SERVICE_NAME: worker
       HTTP_PORT: 8080
-      # Matching service to poll
       MATCHING_ADDR: linkflow-matching:7235
-      # History service for results
       HISTORY_ADDR: linkflow-history:7234
-      # Worker config
       TASK_QUEUE: workflows-high,workflows-default,workflows-low,default
       NUM_WORKERS: 4
       POLL_INTERVAL: 1s
-      # Laravel callback (for hybrid mode)
-      # SECURITY: LINKFLOW_SECRET MUST be set via environment variable
-      # Generate a strong secret: openssl rand -base64 32
       CALLBACK_URL: http://linkflow-api:8000/api/v1/jobs/callback
-      CALLBACK_SECRET: ${LINKFLOW_SECRET:?LINKFLOW_SECRET environment variable is required}
+      CALLBACK_SECRET: ${LINKFLOW_SECRET:?Set LINKFLOW_SECRET}
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8080/health" ]
       interval: 10s
@@ -189,7 +156,7 @@ services:
       retries: 5
       start_period: 10s
     deploy:
-      replicas: 1 # Scale this up for more capacity
+      replicas: 1
     depends_on:
       matching:
         condition: service_healthy
@@ -197,11 +164,6 @@ services:
   # ============================================
   # 5. TIMER SERVICE - Scheduling
   # ============================================
-  # Purpose: Handles time-based operations
-  # - Scheduled workflows (cron)
-  # - Delay nodes (wait X minutes)
-  # - Timeout enforcement
-  # - Retry delays
   timer:
     build:
       context: .
@@ -211,16 +173,14 @@ services:
     container_name: linkflow-timer
     <<: *common-config
     ports:
-      - "8084:8080" # HTTP
-      - "7238:7238" # gRPC (internal)
+      - "8084:8080"
+      - "7238:7238"
     environment:
       <<: *common-env
       SERVICE_NAME: timer
       GRPC_PORT: 7238
       HTTP_PORT: 8080
-      # History service
       HISTORY_ADDR: linkflow-history:7234
-      # Timer config
       SCAN_INTERVAL: 1s
       BATCH_SIZE: 100
     healthcheck:
@@ -236,11 +196,6 @@ services:
   # ============================================
   # 6. VISIBILITY SERVICE - Search & Query
   # ============================================
-  # Purpose: Search and list workflows
-  # - Full-text search
-  # - Filter by status, time, attributes
-  # - Pagination
-  # - Real-time indexing
   visibility:
     build:
       context: .
@@ -250,15 +205,14 @@ services:
     container_name: linkflow-visibility
     <<: *common-config
     ports:
-      - "8085:8080" # HTTP
-      - "7237:7237" # gRPC (internal)
+      - "8085:8080"
+      - "7237:7237"
     environment:
       <<: *common-env
       SERVICE_NAME: visibility
       GRPC_PORT: 7237
       HTTP_PORT: 8080
-      # Index config
-      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-} # Optional ES for advanced search
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-}
     healthcheck:
       test: [ "CMD", "wget", "-q", "--spider", "http://localhost:8080/health" ]
       interval: 10s
@@ -267,13 +221,8 @@ services:
       start_period: 10s
 
   # ============================================
-  # 7. EDGE SERVICE - Edge Execution
+  # 7. EDGE SERVICE (Optional)
   # ============================================
-  # Purpose: Run workflows close to data
-  # - Low-latency execution
-  # - Offline capability
-  # - WASM runtime
-  # - Sync to cloud
   edge:
     build:
       context: .
@@ -283,12 +232,11 @@ services:
     container_name: linkflow-edge
     <<: *common-config
     ports:
-      - "8086:8080" # HTTP
+      - "8086:8080"
     environment:
       <<: *common-env
       SERVICE_NAME: edge
       HTTP_PORT: 8080
-      # Cloud sync
       FRONTEND_ADDR: linkflow-frontend:9090
       SYNC_INTERVAL: 30s
     healthcheck:
@@ -298,16 +246,11 @@ services:
       retries: 5
       start_period: 10s
     profiles:
-      - edge # Optional: only start with --profile edge
+      - edge
 
   # ============================================
-  # 8. CONTROL PLANE - Cluster Management
+  # 8. CONTROL PLANE (Optional)
   # ============================================
-  # Purpose: Coordinates all services
-  # - Configuration distribution
-  # - Service discovery
-  # - Multi-region federation
-  # - Health monitoring
   control-plane:
     build:
       context: .
@@ -317,14 +260,13 @@ services:
     container_name: linkflow-control-plane
     <<: *common-config
     ports:
-      - "8087:8080" # HTTP
-      - "7239:7239" # gRPC (internal)
+      - "8087:8080"
+      - "7239:7239"
     environment:
       <<: *common-env
       SERVICE_NAME: control-plane
       GRPC_PORT: 7239
       HTTP_PORT: 8080
-      # Cell configuration
       CELL_ID: ${CELL_ID:-cell-1}
       REGION: ${REGION:-local}
     healthcheck:
@@ -334,10 +276,10 @@ services:
       retries: 5
       start_period: 10s
     profiles:
-      - control # Optional: only start with --profile control
+      - control
 
   # ============================================
-  # MIGRATIONS - One-time setup
+  # MIGRATIONS (One-time)
   # ============================================
   migrate:
     build:
@@ -347,8 +289,7 @@ services:
         SERVICE: worker
     container_name: linkflow-go-migrate
     environment:
-      # SECURITY: Use SSL for production
-      DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:-linkflow}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer&search_path=workflow
+      DATABASE_URL: postgres://${POSTGRES_USER:-linkflow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@linkflow-postgres:5432/${POSTGRES_DB:-linkflow}?sslmode=prefer&search_path=workflow
     command: >
       sh -c "
         echo '🔄 Running Go Engine migrations...' &&
@@ -364,4 +305,3 @@ networks:
   linkflow:
     name: linkflow
     driver: bridge
-    # external: true # Commented out for Monorepo Root compatibility

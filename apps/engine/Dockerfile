@@ -1,12 +1,15 @@
-# Build stage
+# LinkFlow Engine - Multi-stage Go Dockerfile
+# Builds any service via SERVICE build arg
+
+# ============================================
+# Build Stage
+# ============================================
 FROM golang:1.24-alpine AS builder
 
 ARG SERVICE=frontend
 ARG VERSION=dev
 
 RUN apk add --no-cache git ca-certificates tzdata
-
-
 
 WORKDIR /app
 
@@ -17,20 +20,20 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-
-
-# Build the service
+# Build the service (static binary, stripped)
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags "-X main.version=${VERSION} -s -w" \
     -o /app/bin/service \
     ./cmd/${SERVICE}
 
-# Runtime stage
+# ============================================
+# Runtime Stage
+# ============================================
 FROM alpine:3.19
 
 ARG SERVICE=frontend
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata wget
 
 # Create non-root user
 RUN addgroup -g 1000 linkflow && \
@@ -50,5 +53,8 @@ RUN chown -R linkflow:linkflow /app
 USER linkflow
 
 EXPOSE 8080 9090
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q --spider http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["/app/service"]
