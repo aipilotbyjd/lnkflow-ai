@@ -7,19 +7,17 @@ use App\Http\Requests\Api\V1\Subscription\StoreSubscriptionRequest;
 use App\Http\Resources\Api\V1\SubscriptionResource;
 use App\Models\Plan;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SubscriptionController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
+
 
     public function show(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.view');
+        $this->authorize('workspace.view');
 
         $subscription = $workspace->subscription()->with('plan')->first();
 
@@ -37,7 +35,7 @@ class SubscriptionController extends Controller
 
     public function store(StoreSubscriptionRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $plan = Plan::findOrFail($request->validated('plan_id'));
 
@@ -59,7 +57,7 @@ class SubscriptionController extends Controller
 
     public function destroy(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $subscription = $workspace->subscription;
 

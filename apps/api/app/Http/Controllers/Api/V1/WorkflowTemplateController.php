@@ -7,15 +7,13 @@ use App\Http\Resources\Api\V1\WorkflowResource;
 use App\Models\Workflow;
 use App\Models\WorkflowTemplate;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class WorkflowTemplateController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
+
 
     /**
      * List all available templates.
@@ -96,7 +94,7 @@ class WorkflowTemplateController extends Controller
      */
     public function use(Request $request, Workspace $workspace, string $slug): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
+        $this->authorize('workflow.create');
 
         $template = WorkflowTemplate::where('slug', $slug)->active()->firstOrFail();
 

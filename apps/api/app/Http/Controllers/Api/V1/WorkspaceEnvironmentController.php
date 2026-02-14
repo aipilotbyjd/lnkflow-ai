@@ -13,7 +13,7 @@ use App\Models\WorkflowVersion;
 use App\Models\Workspace;
 use App\Models\WorkspaceEnvironment;
 use App\Services\GitEnvironmentService;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -21,20 +21,19 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class WorkspaceEnvironmentController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private GitEnvironmentService $gitEnvironmentService
     ) {}
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'environment.view');
+        $this->authorize('environment.view');
 
         return WorkspaceEnvironmentResource::collection($workspace->environments()->latest()->get());
     }
 
     public function store(StoreWorkspaceEnvironmentRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'environment.create');
+        $this->authorize('environment.create');
 
         $environment = $this->gitEnvironmentService->createEnvironment($workspace, $request->validated());
 
@@ -49,7 +48,7 @@ class WorkspaceEnvironmentController extends Controller
         Workspace $workspace,
         Workflow $workflow
     ): JsonResponse {
-        $this->permissionService->authorize($request->user(), $workspace, 'environment.deploy');
+        $this->authorize('environment.deploy');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $from = WorkspaceEnvironment::query()->findOrFail($request->integer('from_environment_id'));
@@ -80,7 +79,7 @@ class WorkspaceEnvironmentController extends Controller
         Workspace $workspace,
         Workflow $workflow
     ): JsonResponse {
-        $this->permissionService->authorize($request->user(), $workspace, 'environment.deploy');
+        $this->authorize('environment.deploy');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $to = WorkspaceEnvironment::query()->findOrFail($request->integer('to_environment_id'));
@@ -103,7 +102,7 @@ class WorkspaceEnvironmentController extends Controller
 
     public function releases(Request $request, Workspace $workspace, Workflow $workflow): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'environment.view');
+        $this->authorize('environment.view');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $releases = $workflow->environmentReleases()->with(['fromEnvironment', 'toEnvironment', 'triggeredBy'])->latest()->get();

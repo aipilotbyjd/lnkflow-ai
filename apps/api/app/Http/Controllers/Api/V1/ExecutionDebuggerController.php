@@ -6,20 +6,19 @@ use App\Http\Controllers\Controller;
 use App\Models\Execution;
 use App\Models\Workspace;
 use App\Services\TimeTravelDebuggerService;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ExecutionDebuggerController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private TimeTravelDebuggerService $timeTravelDebuggerService
     ) {}
 
     public function timeline(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         $execution->load(['nodes', 'logs']);
@@ -31,7 +30,7 @@ class ExecutionDebuggerController extends Controller
 
     public function snapshot(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         $sequence = $request->integer('sequence', 0);
@@ -43,7 +42,7 @@ class ExecutionDebuggerController extends Controller
 
     public function diff(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         $compareWith = Execution::query()->findOrFail($request->integer('compare_with'));

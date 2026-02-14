@@ -6,14 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Plan;
 use App\Models\Workspace;
 use App\Services\StripeService;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class BillingController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private StripeService $stripeService
     ) {}
 
@@ -22,7 +21,7 @@ class BillingController extends Controller
      */
     public function show(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $subscription = $workspace->subscription()->with('plan')->first();
 
@@ -38,7 +37,7 @@ class BillingController extends Controller
      */
     public function createCheckoutSession(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $validated = $request->validate([
             'plan_id' => 'required|exists:plans,id',
@@ -75,7 +74,7 @@ class BillingController extends Controller
      */
     public function createPortalSession(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $validated = $request->validate([
             'return_url' => 'nullable|url',
@@ -103,7 +102,7 @@ class BillingController extends Controller
      */
     public function cancel(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $validated = $request->validate([
             'immediately' => 'boolean',
@@ -139,7 +138,7 @@ class BillingController extends Controller
      */
     public function resume(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $subscription = $workspace->subscription;
 
@@ -168,7 +167,7 @@ class BillingController extends Controller
      */
     public function changePlan(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.manage-billing');
+        $this->authorize('workspace.manage-billing');
 
         $validated = $request->validate([
             'plan_id' => 'required|exists:plans,id',

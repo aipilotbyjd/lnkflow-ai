@@ -5,20 +5,19 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Workspace;
 use App\Services\ConnectorReliabilityService;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ConnectorReliabilityController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private ConnectorReliabilityService $connectorReliabilityService
     ) {}
 
     public function index(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
 
         $metrics = $this->connectorReliabilityService->metrics($workspace, $request->all());
 
@@ -29,7 +28,7 @@ class ConnectorReliabilityController extends Controller
 
     public function attempts(Request $request, Workspace $workspace, string $connectorKey): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
 
         $attempts = $this->connectorReliabilityService->attempts($workspace, $connectorKey, $request->all());
 

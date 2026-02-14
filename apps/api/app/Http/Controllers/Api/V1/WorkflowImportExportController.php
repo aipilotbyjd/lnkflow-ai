@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Workflow;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -14,16 +14,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class WorkflowImportExportController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
+
 
     /**
      * Export a single workflow to JSON.
      */
     public function export(Request $request, Workspace $workspace, Workflow $workflow): StreamedResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.export');
+        $this->authorize('workflow.export');
 
         $exportData = $this->buildExportData($workflow);
 
@@ -41,7 +39,7 @@ class WorkflowImportExportController extends Controller
      */
     public function exportBulk(Request $request, Workspace $workspace): StreamedResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.export');
+        $this->authorize('workflow.export');
 
         $validated = $request->validate([
             'workflow_ids' => 'required|array',
@@ -73,7 +71,7 @@ class WorkflowImportExportController extends Controller
      */
     public function import(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.import');
+        $this->authorize('workflow.import');
 
         $request->validate([
             'file' => 'required|file|mimes:json|max:5120', // 5MB max
@@ -112,7 +110,7 @@ class WorkflowImportExportController extends Controller
      */
     public function importFromJson(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.import');
+        $this->authorize('workflow.import');
 
         $data = $request->validate([
             'workflow' => 'required|array',

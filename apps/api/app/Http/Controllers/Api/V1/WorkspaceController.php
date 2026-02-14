@@ -7,16 +7,14 @@ use App\Http\Requests\Api\V1\Workspace\StoreWorkspaceRequest;
 use App\Http\Requests\Api\V1\Workspace\UpdateWorkspaceRequest;
 use App\Http\Resources\Api\V1\WorkspaceResource;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class WorkspaceController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
+
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -47,7 +45,7 @@ class WorkspaceController extends Controller
 
     public function show(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.view');
+        $this->authorize('workspace.view');
 
         $workspace->load('owner');
 
@@ -58,7 +56,7 @@ class WorkspaceController extends Controller
 
     public function update(UpdateWorkspaceRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.update');
+        $this->authorize('workspace.update');
 
         $workspace->update($request->validated());
         $workspace->load('owner');
@@ -71,7 +69,7 @@ class WorkspaceController extends Controller
 
     public function destroy(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.delete');
+        $this->authorize('workspace.delete');
 
         if ($workspace->owner_id !== $request->user()->id) {
             abort(403, 'Only the workspace owner can delete the workspace.');

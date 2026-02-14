@@ -9,7 +9,7 @@ use App\Http\Resources\Api\V1\WorkspaceResource;
 use App\Models\Invitation;
 use App\Models\Workspace;
 use App\Notifications\WorkspaceInvitationNotification;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,13 +17,11 @@ use Illuminate\Support\Facades\Notification;
 
 class InvitationController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
+
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'member.view');
+        $this->authorize('member.view');
 
         $invitations = $workspace->invitations()
             ->whereNull('accepted_at')
@@ -36,7 +34,7 @@ class InvitationController extends Controller
 
     public function store(StoreInvitationRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'member.invite');
+        $this->authorize('member.invite');
 
         if ($request->validated('role') === 'admin' && $workspace->owner_id !== $request->user()->id) {
             abort(403, 'Only the workspace owner can invite users with the admin role.');
@@ -77,7 +75,7 @@ class InvitationController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Invitation $invitation): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'member.invite');
+        $this->authorize('member.invite');
 
         if ($invitation->workspace_id !== $workspace->id) {
             abort(404);

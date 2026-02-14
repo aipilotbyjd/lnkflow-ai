@@ -5,19 +5,17 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\ActivityLogResource;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ActivityLogController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
+
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workspace.view');
+        $this->authorize('workspace.view');
 
         $query = $workspace->activityLogs()
             ->with('user')

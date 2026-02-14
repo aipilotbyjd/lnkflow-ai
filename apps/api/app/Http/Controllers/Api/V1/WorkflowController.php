@@ -9,7 +9,6 @@ use App\Http\Resources\Api\V1\WorkflowResource;
 use App\Models\Workflow;
 use App\Models\Workspace;
 use App\Services\ContractCompilerService;
-use App\Services\WorkspacePermissionService;
 use App\Services\WorkspacePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,14 +18,13 @@ use Illuminate\Support\Facades\DB;
 class WorkflowController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private ContractCompilerService $contractCompilerService,
         private WorkspacePolicyService $workspacePolicyService
     ) {}
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
+        $this->authorize('workflow.view');
 
         $workflows = $workspace->workflows()
             ->with('creator')
@@ -38,7 +36,7 @@ class WorkflowController extends Controller
 
     public function store(StoreWorkflowRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
+        $this->authorize('workflow.create');
 
         $validated = $request->validated();
         $policyViolations = $this->workspacePolicyService->violations($workspace, $validated['nodes'] ?? []);
@@ -89,7 +87,7 @@ class WorkflowController extends Controller
 
     public function show(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.view');
+        $this->authorize('workflow.view');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $workflow->load('creator');
@@ -101,7 +99,7 @@ class WorkflowController extends Controller
 
     public function update(UpdateWorkflowRequest $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.update');
+        $this->authorize('workflow.update');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         if ($workflow->is_locked) {
@@ -150,7 +148,7 @@ class WorkflowController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.delete');
+        $this->authorize('workflow.delete');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         if ($workflow->is_locked) {
@@ -168,7 +166,7 @@ class WorkflowController extends Controller
 
     public function activate(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.activate');
+        $this->authorize('workflow.activate');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $workflow->activate();
@@ -182,7 +180,7 @@ class WorkflowController extends Controller
 
     public function deactivate(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.activate');
+        $this->authorize('workflow.activate');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $workflow->deactivate();
@@ -196,7 +194,7 @@ class WorkflowController extends Controller
 
     public function duplicate(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.create');
+        $this->authorize('workflow.create');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
         $newWorkflow = $workflow->replicate(['execution_count', 'last_executed_at', 'success_rate']);

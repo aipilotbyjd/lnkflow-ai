@@ -8,20 +8,15 @@ use App\Http\Requests\Api\V1\Variable\UpdateVariableRequest;
 use App\Http\Resources\Api\V1\VariableResource;
 use App\Models\Variable;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class VariableController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
-
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'variable.view');
+        $this->authorize('variable.view', $workspace);
 
         $query = $workspace->variables()->with(['creator']);
 
@@ -36,7 +31,7 @@ class VariableController extends Controller
 
     public function store(StoreVariableRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'variable.create');
+        $this->authorize('variable.create', $workspace);
 
         $variable = new Variable([
             'workspace_id' => $workspace->id,
@@ -60,7 +55,7 @@ class VariableController extends Controller
 
     public function show(Request $request, Workspace $workspace, Variable $variable): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'variable.view');
+        $this->authorize('variable.view', $workspace);
         $this->ensureVariableBelongsToWorkspace($variable, $workspace);
 
         $variable->load(['creator']);
@@ -72,7 +67,7 @@ class VariableController extends Controller
 
     public function update(UpdateVariableRequest $request, Workspace $workspace, Variable $variable): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'variable.update');
+        $this->authorize('variable.update', $workspace);
         $this->ensureVariableBelongsToWorkspace($variable, $workspace);
 
         if ($request->has('key')) {
@@ -102,7 +97,7 @@ class VariableController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Variable $variable): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'variable.delete');
+        $this->authorize('variable.delete', $workspace);
         $this->ensureVariableBelongsToWorkspace($variable, $workspace);
 
         $variable->delete();

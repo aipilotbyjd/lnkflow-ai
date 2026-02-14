@@ -9,20 +9,15 @@ use App\Http\Resources\Api\V1\WebhookResource;
 use App\Models\Webhook;
 use App\Models\Workflow;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class WebhookController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
-
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.view');
+        $this->authorize('webhook.view');
 
         $query = Webhook::query()
             ->where('workspace_id', $workspace->id)
@@ -39,7 +34,7 @@ class WebhookController extends Controller
 
     public function store(StoreWebhookRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.create');
+        $this->authorize('webhook.create');
 
         $webhook = Webhook::create([
             'workflow_id' => $request->validated('workflow_id'),
@@ -63,7 +58,7 @@ class WebhookController extends Controller
 
     public function show(Request $request, Workspace $workspace, Webhook $webhook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.view');
+        $this->authorize('webhook.view');
         $this->ensureWebhookBelongsToWorkspace($webhook, $workspace);
 
         return response()->json([
@@ -73,7 +68,7 @@ class WebhookController extends Controller
 
     public function update(UpdateWebhookRequest $request, Workspace $workspace, Webhook $webhook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.update');
+        $this->authorize('webhook.update');
         $this->ensureWebhookBelongsToWorkspace($webhook, $workspace);
 
         $updateData = array_filter($request->validated(), fn ($value) => $value !== null);
@@ -88,7 +83,7 @@ class WebhookController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Webhook $webhook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.delete');
+        $this->authorize('webhook.delete');
         $this->ensureWebhookBelongsToWorkspace($webhook, $workspace);
 
         $webhook->delete();
@@ -100,7 +95,7 @@ class WebhookController extends Controller
 
     public function regenerateUuid(Request $request, Workspace $workspace, Webhook $webhook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.update');
+        $this->authorize('webhook.update');
         $this->ensureWebhookBelongsToWorkspace($webhook, $workspace);
 
         $webhook->update([
@@ -115,7 +110,7 @@ class WebhookController extends Controller
 
     public function activate(Request $request, Workspace $workspace, Webhook $webhook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.update');
+        $this->authorize('webhook.update');
         $this->ensureWebhookBelongsToWorkspace($webhook, $workspace);
 
         $webhook->activate();
@@ -128,7 +123,7 @@ class WebhookController extends Controller
 
     public function deactivate(Request $request, Workspace $workspace, Webhook $webhook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.update');
+        $this->authorize('webhook.update');
         $this->ensureWebhookBelongsToWorkspace($webhook, $workspace);
 
         $webhook->deactivate();
@@ -141,7 +136,7 @@ class WebhookController extends Controller
 
     public function forWorkflow(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'webhook.view');
+        $this->authorize('webhook.view');
 
         if ($workflow->workspace_id !== $workspace->id) {
             abort(404, 'Workflow not found.');

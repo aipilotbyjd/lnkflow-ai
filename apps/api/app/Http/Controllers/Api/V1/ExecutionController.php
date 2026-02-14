@@ -15,7 +15,6 @@ use App\Models\Workflow;
 use App\Models\Workspace;
 use App\Services\ContractCompilerService;
 use App\Services\DeterministicReplayService;
-use App\Services\WorkspacePermissionService;
 use App\Services\WorkspacePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +23,6 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class ExecutionController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private ContractCompilerService $contractCompilerService,
         private WorkspacePolicyService $workspacePolicyService,
         private DeterministicReplayService $deterministicReplayService
@@ -32,7 +30,7 @@ class ExecutionController extends Controller
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
 
         $query = $workspace->executions()
             ->with(['workflow', 'triggeredBy']);
@@ -56,7 +54,7 @@ class ExecutionController extends Controller
 
     public function store(Request $request, Workspace $workspace, Workflow $workflow): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.execute');
+        $this->authorize('workflow.execute');
 
         if ($workflow->workspace_id !== $workspace->id) {
             abort(404, 'Workflow not found.');
@@ -110,7 +108,7 @@ class ExecutionController extends Controller
 
     public function show(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         $execution->load(['workflow', 'triggeredBy', 'nodes', 'replayPack', 'runbook']);
@@ -122,7 +120,7 @@ class ExecutionController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.delete');
+        $this->authorize('execution.delete');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         $execution->delete();
@@ -134,7 +132,7 @@ class ExecutionController extends Controller
 
     public function nodes(Request $request, Workspace $workspace, Execution $execution): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         return ExecutionNodeResource::collection($execution->nodes);
@@ -142,7 +140,7 @@ class ExecutionController extends Controller
 
     public function logs(Request $request, Workspace $workspace, Execution $execution): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         $query = $execution->logs();
@@ -160,7 +158,7 @@ class ExecutionController extends Controller
 
     public function retry(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.execute');
+        $this->authorize('workflow.execute');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         if (! $execution->canRetry()) {
@@ -210,7 +208,7 @@ class ExecutionController extends Controller
         Workspace $workspace,
         Execution $execution
     ): JsonResponse {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.execute');
+        $this->authorize('workflow.execute');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         if (! $execution->replayPack) {
@@ -237,7 +235,7 @@ class ExecutionController extends Controller
 
     public function cancel(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.execute');
+        $this->authorize('workflow.execute');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         if (! $execution->canCancel()) {
@@ -257,7 +255,7 @@ class ExecutionController extends Controller
 
     public function workflowExecutions(Request $request, Workspace $workspace, Workflow $workflow): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
 
         if ($workflow->workspace_id !== $workspace->id) {
             abort(404, 'Workflow not found.');
@@ -276,7 +274,7 @@ class ExecutionController extends Controller
 
     public function replayPack(Request $request, Workspace $workspace, Execution $execution): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureExecutionBelongsToWorkspace($execution, $workspace);
 
         $execution->load('replayPack');
@@ -305,7 +303,7 @@ class ExecutionController extends Controller
 
     public function stats(Request $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
 
         $baseQuery = $workspace->executions();
 

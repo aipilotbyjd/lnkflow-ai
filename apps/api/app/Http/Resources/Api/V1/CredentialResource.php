@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources\Api\V1;
 
-use App\Services\WorkspacePermissionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -29,17 +28,13 @@ class CredentialResource extends JsonResource
             'updated_at' => $this->updated_at,
         ];
 
-        $user = $request->user();
-        $workspace = $this->resource->workspace;
+        $permissions = $request->attributes->get('workspace_permissions', []);
 
-        if ($user && $workspace) {
-            $permissionService = app(WorkspacePermissionService::class);
-
-            if ($permissionService->hasPermission($user, $workspace, 'credential.update')) {
-                $data['data'] = $this->getMaskedData();
-            }
+        if (in_array('credential.update', $permissions)) {
+            $data['data'] = $this->getMaskedData();
         }
 
         return $data;
     }
 }
+

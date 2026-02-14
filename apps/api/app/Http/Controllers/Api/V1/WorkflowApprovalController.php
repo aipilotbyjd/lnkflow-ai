@@ -8,7 +8,7 @@ use App\Http\Resources\Api\V1\WorkflowApprovalResource;
 use App\Models\WorkflowApproval;
 use App\Models\Workspace;
 use App\Services\WorkflowApprovalService;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -16,13 +16,12 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class WorkflowApprovalController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private WorkflowApprovalService $workflowApprovalService
     ) {}
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
 
         $approvals = $this->workflowApprovalService->inbox($workspace, $request->all());
 
@@ -31,7 +30,7 @@ class WorkflowApprovalController extends Controller
 
     public function show(Request $request, Workspace $workspace, WorkflowApproval $approval): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureBelongsToWorkspace($approval, $workspace);
 
         return response()->json([
@@ -44,7 +43,7 @@ class WorkflowApprovalController extends Controller
         Workspace $workspace,
         WorkflowApproval $approval
     ): JsonResponse {
-        $this->permissionService->authorize($request->user(), $workspace, 'workflow.execute');
+        $this->authorize('workflow.execute');
         $this->ensureBelongsToWorkspace($approval, $workspace);
 
         $execution = $this->workflowApprovalService->decide(

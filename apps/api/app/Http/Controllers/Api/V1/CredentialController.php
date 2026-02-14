@@ -9,7 +9,6 @@ use App\Http\Resources\Api\V1\CredentialResource;
 use App\Models\Credential;
 use App\Models\Workspace;
 use App\Services\CredentialTestService;
-use App\Services\WorkspacePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,13 +16,12 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 class CredentialController extends Controller
 {
     public function __construct(
-        private WorkspacePermissionService $permissionService,
         private CredentialTestService $credentialTestService
     ) {}
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.view');
+        $this->authorize('credential.view', $workspace);
 
         $query = $workspace->credentials()
             ->with(['credentialType', 'creator']);
@@ -39,7 +37,7 @@ class CredentialController extends Controller
 
     public function store(StoreCredentialRequest $request, Workspace $workspace): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.create');
+        $this->authorize('credential.create', $workspace);
 
         $credential = $workspace->credentials()->create([
             'name' => $request->validated('name'),
@@ -59,7 +57,7 @@ class CredentialController extends Controller
 
     public function show(Request $request, Workspace $workspace, Credential $credential): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.view');
+        $this->authorize('credential.view', $workspace);
         $this->ensureCredentialBelongsToWorkspace($credential, $workspace);
 
         $credential->load(['credentialType', 'creator']);
@@ -71,7 +69,7 @@ class CredentialController extends Controller
 
     public function update(UpdateCredentialRequest $request, Workspace $workspace, Credential $credential): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.update');
+        $this->authorize('credential.update', $workspace);
         $this->ensureCredentialBelongsToWorkspace($credential, $workspace);
 
         $updateData = [];
@@ -99,7 +97,7 @@ class CredentialController extends Controller
 
     public function destroy(Request $request, Workspace $workspace, Credential $credential): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.delete');
+        $this->authorize('credential.delete', $workspace);
         $this->ensureCredentialBelongsToWorkspace($credential, $workspace);
 
         $credential->delete();
@@ -111,7 +109,7 @@ class CredentialController extends Controller
 
     public function test(Request $request, Workspace $workspace, Credential $credential): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'credential.update');
+        $this->authorize('credential.update', $workspace);
         $this->ensureCredentialBelongsToWorkspace($credential, $workspace);
 
         $result = $this->credentialTestService->test($credential);

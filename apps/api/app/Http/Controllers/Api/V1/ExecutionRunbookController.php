@@ -6,20 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Api\V1\ExecutionRunbookResource;
 use App\Models\ExecutionRunbook;
 use App\Models\Workspace;
-use App\Services\WorkspacePermissionService;
+
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ExecutionRunbookController extends Controller
 {
-    public function __construct(
-        private WorkspacePermissionService $permissionService
-    ) {}
+
 
     public function index(Request $request, Workspace $workspace): AnonymousResourceCollection
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
 
         $query = $workspace->runbooks()->with('acknowledgedBy')->latest();
 
@@ -32,7 +30,7 @@ class ExecutionRunbookController extends Controller
 
     public function show(Request $request, Workspace $workspace, ExecutionRunbook $runbook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.view');
+        $this->authorize('execution.view');
         $this->ensureRunbookBelongsToWorkspace($workspace, $runbook);
 
         return response()->json([
@@ -42,7 +40,7 @@ class ExecutionRunbookController extends Controller
 
     public function acknowledge(Request $request, Workspace $workspace, ExecutionRunbook $runbook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.delete');
+        $this->authorize('execution.delete');
         $this->ensureRunbookBelongsToWorkspace($workspace, $runbook);
 
         $runbook->update([
@@ -59,7 +57,7 @@ class ExecutionRunbookController extends Controller
 
     public function resolve(Request $request, Workspace $workspace, ExecutionRunbook $runbook): JsonResponse
     {
-        $this->permissionService->authorize($request->user(), $workspace, 'execution.delete');
+        $this->authorize('execution.delete');
         $this->ensureRunbookBelongsToWorkspace($workspace, $runbook);
 
         $runbook->update([
