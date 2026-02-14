@@ -1,0 +1,125 @@
+# LinkFlow API - Docker Compose
+# Connects to external 'linkflow' network (start infrastructure first)
+#
+# Prerequisites:
+#   1. Start infrastructure: cd ../infrastructure && docker-compose up -d
+#   2. Copy env file: cp .env.docker.example .env.docker (first time only)
+#
+# Usage:
+#   docker-compose up -d                    # Start API + Queue
+#   docker-compose --profile full up -d     # Start all (including scheduler)
+#   docker-compose logs -f                  # View logs
+#   docker-compose exec api php artisan migrate  # Run migrations
+
+services:
+  # ============================================
+  # Laravel API
+  # ============================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: linkflow-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    environment:
+      # Override for Docker networking
+      DB_HOST: linkflow-postgres
+      REDIS_HOST: linkflow-redis
+      LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
+      ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
+      REDIS_QUEUE: workflows-default
+    volumes:
+      - .:/var/www/html
+    networks:
+      - linkflow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ============================================
+  # Queue Worker
+  # ============================================
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: linkflow-queue
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      DB_HOST: linkflow-postgres
+      REDIS_HOST: linkflow-redis
+      LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
+      ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
+    volumes:
+      - .:/var/www/html
+    command: php artisan queue:work redis --queue=workflows-high,workflows-default,workflows-low,default --sleep=3 --tries=3 --max-time=3600 --verbose
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep 'queue:work' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - linkflow
+
+  # ============================================
+  # Scheduler (Cron) - Optional
+  # ============================================
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: linkflow-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      DB_HOST: linkflow-postgres
+      REDIS_HOST: linkflow-redis
+      LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
+      ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
+    volumes:
+      - .:/var/www/html
+    command: >
+      sh -c "while true; do php artisan schedule:run --verbose; sleep 60; done"
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep 'schedule:run' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - linkflow
+    profiles:
+      - full
+
+networks:
+  linkflow:
+    name: linkflow
+    driver: bridge
+    # external: true # Commented out for Monorepo Root compatibility
