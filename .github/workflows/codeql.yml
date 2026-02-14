@@ -50,33 +50,9 @@ jobs:
         with:
           category: "/language:go"
 
-  analyze-php:
-    name: Analyze PHP
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      packages: read
-      actions: read
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: javascript  # CodeQL doesn't directly support PHP, use JS for frontend assets
-          source-root: apps/api
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:javascript"
-
+  # Semgrep covers PHP (CodeQL doesn't natively support PHP)
   semgrep:
-    name: Semgrep SAST
+    name: Semgrep SAST (PHP + Go)
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -91,6 +67,7 @@ jobs:
             p/security-audit
             p/secrets
             p/owasp-top-ten
+            p/php
           generateSarif: true
 
       - name: Upload SARIF
