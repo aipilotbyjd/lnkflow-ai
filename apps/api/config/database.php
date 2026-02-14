@@ -111,6 +111,22 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('COCKROACHDB_SSLMODE', 'verify-full'),
+            'sslrootcert' => 'system',
+        ],
+
+        'neon' => [
+            'driver' => 'pgsql',
+            'url' => env('NEON_URL'),
+            'host' => env('NEON_HOST', '127.0.0.1'),
+            'port' => env('NEON_PORT', '5432'),
+            'database' => env('NEON_DATABASE', 'neondb'),
+            'username' => env('NEON_USERNAME', ''),
+            'password' => env('NEON_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('NEON_SSLMODE', 'require'),
         ],
 
         'sqlsrv' => [
