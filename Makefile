@@ -13,7 +13,9 @@ help: ## Show this help
 setup: ## First-time setup (copy env files, generate secrets)
 	@echo "📋 Setting up LinkFlow..."
 	@[ -f .env ] || (cp .env.example .env && echo "✅ Created .env" || echo "⚠️  .env.example not found")
-	@[ -f apps/api/.env.docker ] || (cp apps/api/.env.example apps/api/.env.docker 2>/dev/null && echo "✅ Created apps/api/.env.docker" || echo "⚠️  Copy apps/api/.env.example manually")
+	@[ -f infra/.env ] || (cp infra/.env.example infra/.env && echo "✅ Created infra/.env" || echo "⚠️  infra/.env.example not found")
+	@[ -f apps/api/.env.docker ] || (cp apps/api/.env.docker.example apps/api/.env.docker && echo "✅ Created apps/api/.env.docker" || echo "⚠️  apps/api/.env.docker.example not found")
+	@[ -f apps/engine/.env ] || (cp apps/engine/.env.example apps/engine/.env && echo "✅ Created apps/engine/.env" || echo "⚠️  apps/engine/.env.example not found")
 	@echo ""
 	@echo "🔑 Generate secrets with:"
 	@echo "  openssl rand -base64 24   # For POSTGRES_PASSWORD, REDIS_PASSWORD"

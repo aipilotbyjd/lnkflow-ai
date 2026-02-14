@@ -1,71 +1,59 @@
 # LinkFlow Infrastructure
 
-PostgreSQL and Redis stack shared by all LinkFlow services.
-
-## Quick Start
-
-```bash
-# Start infrastructure
-docker-compose up -d
-
-# Check status
-docker-compose ps
-
-# View logs
-docker-compose logs -f
-
-# Stop (keeps data)
-docker-compose down
-
-# Stop and delete all data
-docker-compose down -v
-```
+Shared infrastructure stack for LinkFlow services.
 
 ## Services
 
-| Service | Port | Description |
-|---------|------|-------------|
-| PostgreSQL | 5432 | Database |
-| Redis | 6379 | Queue & Cache |
+| Service | Container Name | Port (Host) | Description |
+|---|---|---|---|
+| **PostgreSQL** | `linkflow-postgres` | 5432 | Primary database for API and Engine |
+| **Redis** | `linkflow-redis` | 6379 | Queue, Cache, and Pub/Sub |
+| **Nginx** | `linkflow-nginx` | 80 / 443 | Reverse proxy and TLS termination (Production profile) |
 
-## Configuration
+## Quick Start
 
-Create `.env` file to override defaults:
+We recommend using the root `Makefile` for management, but you can run this stack independently.
 
-```env
-POSTGRES_USER=linkflow
-POSTGRES_PASSWORD=your-secure-password
-POSTGRES_DB=linkflow
-POSTGRES_PORT=5432
-REDIS_PORT=6379
+### 1. Setup Environment
+Copy the example environment file and set secure passwords:
+
+```bash
+cp .env.example .env
+# Edit .env and set POSTGRES_PASSWORD, REDIS_PASSWORD, etc.
 ```
 
-## Connecting From Other Stacks
+### 2. Run via Root Makefile (Recommended)
+From the project root:
 
-Other docker-compose files connect via external network:
-
-```yaml
-networks:
-  linkflow:
-    external: true
+```bash
+make infra-up
 ```
 
-Services connect using container names:
-- Database: `linkflow-postgres:5432`
-- Redis: `linkflow-redis:6379`
+### 3. Run Manually
+```bash
+docker-compose up -d
+```
+
+## Production Mode (Nginx)
+
+To enable Nginx with TLS termination:
+
+1. Place your SSL certificates in `nginx/ssl/`:
+   - `fullchain.pem`
+   - `privkey.pem`
+2. Start with the production profile:
+
+```bash
+# Via Makefile
+make prod-up
+
+# Or manually
+docker-compose --profile production up -d
+```
 
 ## Data Persistence
 
-Data is stored in Docker volumes:
-- `linkflow_postgres_data` - Database files
-- `linkflow_redis_data` - Redis AOF/RDB files
-
-## Backup
-
-```bash
-# Backup PostgreSQL
-docker exec linkflow-postgres pg_dump -U linkflow linkflow > backup.sql
-
-# Restore PostgreSQL
-docker exec -i linkflow-postgres psql -U linkflow linkflow < backup.sql
-```
+Docker volumes ensure data survives container restarts:
+- `linkflow_postgres_data`: Database files
+- `linkflow_redis_data`: Redis persistence
+- `linkflow_nginx_logs`: Web server logs

@@ -1,84 +1,91 @@
-# LinkFlow
+<p align="center"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="LinkFlow Logo"></p>
 
-**LinkFlow** is a high-performance, scalable workflow automation platform built with a hybrid microservices architecture. It combines the ease of use of a Laravel-based API with the raw performance and concurrency of a Go-based execution engine.
+<p align="center">
+<a href="https://github.com/aipilotbyjd/lnkflow-ai/actions"><img src="https://github.com/aipilotbyjd/lnkflow-ai/workflows/CI/CD%20Pipeline/badge.svg" alt="Build Status"></a>
+<a href="https://github.com/aipilotbyjd/lnkflow-ai/security/code-scanning"><img src="https://github.com/aipilotbyjd/lnkflow-ai/workflows/CodeQL%20Security%20Analysis/badge.svg" alt="CodeQL Status"></a>
+<a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
 
-## 🏗 Architecture
+# LinkFlow AI - Workflow Automation Platform
 
-This project is a Monorepo containing the following distinct applications:
+LinkFlow is a scalable workflow automation engine combining a Laravel API backend with a high-performance Go microservices execution engine.
 
-| Component | Path | Description |
-| :--- | :--- | :--- |
-| **API** | [`apps/api`](apps/api) | **Laravel** application serving the REST API, Authentication, and Job Queue. Acts as the control plane for users. |
-| **Engine** | [`apps/engine`](apps/engine) | **Go** microservices cluster (History, Matching, Worker, Timer) responsible for high-performance workflow execution. |
-| **Infrastructure** | [`infra`](infra) | Shared infrastructure definitions (PostgreSQL, Redis) and initialization scripts. |
+## 🏗️ Architecture
 
-## 🚀 Getting Started
+- **[Infrastructure](./infra/README.md)**: PostgreSQL 16, Redis 7 (Queue/Cache), Nginx (TLS/Proxy)
+- **[API](./apps/api/README.md)**: Laravel 10 backend for REST endpoints, auth, and logic
+- **[Engine](./apps/engine/README.md)**: Go microservices for distributed workflow execution, scheduling, and state management
 
-### Prerequisites
+## 🚀 Quick Start (Production/Dev)
 
--   **Docker** & **Docker Compose** (v2.20+ is required for `include` support)
--   **Go** 1.23+ (for engine development)
--   **PHP** 8.2+ & **Composer** (for API development)
+We use a single `Makefile` to manage the entire stack.
 
-### Quick Start with Make
+### 1. Setup Environment
+```bash
+make setup
+# This copies example env files (root, api, infra)
+# Then edit .env to set secure passwords (POSTGRES_PASSWORD, REDIS_PASSWORD, LINKFLOW_SECRET)
+```
 
-We provide a unified `Makefile` to manage the entire stack effortlessly.
+### 2. Start Full Stack
+```bash
+make up
+# Access API at http://localhost:8000
+# Access Engine Dashboard (if enabled) at http://localhost:8080
+```
 
-1.  **Initialize the Project**
-    Installs dependencies for both PHP and Go applications.
-    ```bash
-    make setup
-    ```
-
-2.  **Start the Stack**
-    Brings up the Infrastructure (Postgres/Redis), API, and all 8 Engine Microservices.
-    ```bash
-    make start
-    ```
-    > The stack will be available at:
-    > - **API**: `http://localhost:8000`
-    > - **Engine Frontend**: `http://localhost:8080`
-
-3.  **Check Status**
-    See all running services.
-    ```bash
-    make ps
-    ```
-
-3.  **Use the Application**
-    - Access the API documentation or endpoints at `http://localhost:8000/api/documentation` (if configured) or standard API routes.
-    - The Engine is headless but accepts gRPC/HTTP requests from the API.
-
-4.  **Stop the Stack**
-    ```bash
-    make stop
-    ```
-
-## 🛠 Configuration
-
-The project uses a root `.env` file to manage shared configuration across the monorepo.
-A default `.env` is created during setup, but you should verify critical variables:
-
--   `LINKFLOW_SECRET`: A shared secret key used to secure callbacks from the Go Engine to the Laravel API.
--   `JWT_SECRET`: Secret key for signing authentication tokens.
-
-## 📦 Microservices Overview
-
-The **Go Engine** is composed of several specialized services:
-
--   **Frontend**: API Gateway and request router.
--   **History**: Event sourcing store and state management.
--   **Matching**: Task queuing and worker dispatching.
--   **Worker**: Executors for workflow nodes (HTTP, AI, etc.).
--   **Timer**: Scheduling and delayed execution.
--   **Visibility**: Search and listing capabilities.
--   **Control Plane**: Cluster management and configuration.
-
-## 🧪 Testing
-
-To run the test suites for both applications:
+### 3. Start Individual Components
+To work on specific parts:
 
 ```bash
-make test
+make infra-up       # Start Postgres + Redis
+make api-up         # Start API + Queue workeres
+make engine-up      # Start Go microservices
 ```
-This runs `go test ./...` for the engine and `php artisan test` for the API.
+
+### 4. Stop
+```bash
+make down
+```
+
+## 🛠️ Operations
+
+| Task | Command | Description |
+|---|---|---|
+| **View logs** | `make logs` | Tail logs of all services |
+| **Status** | `make ps` | Check health of all containers |
+| **Migrations** | `make migrate` | Run Laravel + Go migrations |
+| **In-container shell** | `make shell-api` | Bash into API container |
+| **Database shell** | `make shell-db` | `psql` shell |
+| **Redis CLI** | `make shell-redis` | `redis-cli` shell |
+| **Scale Workers** | `make scale-workers N=5` | Scale engine workers to 5 replicas |
+| **Reset DB** | `make migrate-fresh` | Delete data and re-seed (⚠️ Destructive) |
+
+## 📦 Deployment
+
+LinkFlow is built to be deployed anywhere (AWS ECS, Kubernetes, DigitalOcean, bare metal).
+
+### Production Mode (Nginx + SSL)
+1. Add SSL certs to `infra/nginx/ssl`.
+2. Run:
+```bash
+make prod-up
+```
+
+### CI/CD Pipeline
+- **Lint/Static Analysis**: Pint (PHP), golangci-lint (Go)
+- **Tests**: Pest (PHP), go test -race (Go)
+- **Security**: Trivy (FS scan), Govulncheck (Go), Composer Audit (PHP)
+- **Build**: Multi-stage Docker builds push to GHCR
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+
+## 🔒 Security
+
+See [SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
+
+## 📄 License
+
+The LinkFlow framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
