@@ -1,1 +1,56 @@
-/.DS_Store
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDEs
+.idea/
+.vscode/
+.fleet/
+.nova/
+.zed/
+
+# Environment Files
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+vendor/
+
+# API Specifics (apps/api)
+/apps/api/.phpactor.json
+/apps/api/.phpunit.result.cache
+/apps/api/.phpunit.cache
+/apps/api/auth.json
+/apps/api/public/build
+/apps/api/public/hot
+/apps/api/public/storage
+/apps/api/storage/*.key
+/apps/api/storage/pail
+/apps/api/Homestead.json
+/apps/api/Homestead.yaml
+
+# Engine Specifics (apps/engine)
+/apps/engine/bin/
+/apps/engine/*.exe
+/apps/engine/*.exe~
+/apps/engine/*.dll
+/apps/engine/*.so
+/apps/engine/*.dylib
+/apps/engine/*.test
+/apps/engine/*.out
+/apps/engine/coverage.html
+/apps/engine/tmp/
+/apps/engine/dist/
+/apps/engine/api/gen/
+/apps/engine/debug
+/apps/engine/__debug_bin
+/apps/engine/configs/*.local.yaml
+/apps/engine/configs/*.local.json
+
+# Logs
+*.log

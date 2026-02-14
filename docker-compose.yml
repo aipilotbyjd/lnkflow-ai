@@ -1,0 +1,16 @@
+# LinkFlow - Root Orchestration
+# unified "Real World" setup using Docker Compose 'include'
+# This brings up the entire stack: Infrastructure + Go Microservices + Laravel API
+#
+# Usage:
+#   docker-compose up -d
+
+include:
+  # 1. Base Infrastructure (Postgres, Redis)
+  - infra/docker-compose.yml
+
+  # 2. Go Execution Engine (8 Microservices)
+  - apps/engine/docker-compose.yml
+
+  # 3. Laravel API (Web, Queue, Scheduler)
+  - apps/api/docker-compose.yml
