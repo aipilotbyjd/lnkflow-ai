@@ -16,67 +16,117 @@ LinkFlow is a scalable workflow automation engine combining a Laravel API backen
 - **[API](./apps/api/README.md)**: Laravel 10 backend for REST endpoints, auth, and logic
 - **[Engine](./apps/engine/README.md)**: Go microservices for distributed workflow execution, scheduling, and state management
 
-## 🚀 Quick Start (Production/Dev)
+## 🚀 Quick Start
 
-We use a single `Makefile` to manage the entire stack.
-
-### 1. Setup Environment
+### Development
 ```bash
+# 1. Setup environment
 make setup
-# This copies example env files (root, api, infra)
-# Then edit .env to set secure passwords (POSTGRES_PASSWORD, REDIS_PASSWORD, LINKFLOW_SECRET)
-```
 
-### 2. Start Full Stack
-```bash
-make up
+# 2. Start development stack
+make dev
+
+# 3. Run migrations and seed data
+make migrate
+make seed
+
 # Access API at http://localhost:8000
-# Access Engine Dashboard (if enabled) at http://localhost:8080
+# Access Engine at http://localhost:8080
 ```
 
-### 3. Start Individual Components
-To work on specific parts:
-
+### Production
 ```bash
-make infra-up       # Start Postgres + Redis
-make api-up         # Start API + Queue workeres
-make engine-up      # Start Go microservices
+# 1. Validate production setup
+make prod-setup
+
+# 2. Deploy to production
+./scripts/deploy-production.sh
+
+# 3. Verify health
+make prod-health
 ```
 
-### 4. Stop
-```bash
-make down
-```
+📖 **See [Quick Start Guide](docs/05-deployment/11-quick-start-guide.md) for detailed instructions**
 
 ## 🛠️ Operations
 
-| Task | Command | Description |
-|---|---|---|
-| **View logs** | `make logs` | Tail logs of all services |
-| **Status** | `make ps` | Check health of all containers |
-| **Migrations** | `make migrate` | Run Laravel + Go migrations |
-| **In-container shell** | `make shell-api` | Bash into API container |
-| **Database shell** | `make shell-db` | `psql` shell |
-| **Redis CLI** | `make shell-redis` | `redis-cli` shell |
-| **Scale Workers** | `make scale-workers N=5` | Scale engine workers to 5 replicas |
-| **Reset DB** | `make migrate-fresh` | Delete data and re-seed (⚠️ Destructive) |
+### Development Commands
+| Task | Command |
+|------|---------|
+| Start dev stack | `make dev` |
+| View logs | `make logs` |
+| Check status | `make ps` |
+| Run migrations | `make migrate` |
+| API shell | `make shell-api` |
+| Database shell | `make shell-db` |
+
+### Production Commands
+| Task | Command |
+|------|---------|
+| Deploy | `./scripts/deploy-production.sh` |
+| Health check | `make prod-health` |
+| Backup database | `make backup` |
+| Scale API | `make prod-scale-api N=4` |
+| Scale workers | `make prod-scale-workers N=8` |
+| Optimize Laravel | `make optimize` |
+
+📖 **See [Operations Guide](docs/06-operations/) for complete reference**
+
+## 📚 Documentation
+
+### Getting Started
+- [Introduction](docs/01-getting-started/01-introduction.md)
+- [Installation](docs/01-getting-started/02-installation.md)
+- [Quick Start](docs/01-getting-started/03-quickstart.md)
+- [First Workflow](docs/01-getting-started/04-first-workflow.md)
+- [Core Concepts](docs/01-getting-started/05-concepts.md)
+
+### Deployment
+- [Requirements](docs/05-deployment/01-requirements.md)
+- [Docker Deployment](docs/05-deployment/02-docker.md)
+- [Production Guide](docs/05-deployment/09-production-guide.md)
+- [Production Checklist](docs/05-deployment/10-production-ready-checklist.md)
+- [Quick Start Guide](docs/05-deployment/11-quick-start-guide.md)
+
+### Operations
+- [Monitoring](docs/06-operations/monitoring.md)
+- [Backup & Restore](docs/06-operations/backup-restore.md)
+- [Troubleshooting](docs/06-operations/troubleshooting.md)
+- [Incident Response](docs/06-operations/incident-response.md)
+
+### Development
+- [Setup](docs/07-development/setup.md)
+- [Testing](docs/07-development/testing.md)
+- [Debugging](docs/07-development/debugging.md)
+- [Code Style](docs/07-development/code-style.md)
+
+📖 **Full documentation available in [docs/](docs/)**
 
 ## 📦 Deployment
 
-LinkFlow is built to be deployed anywhere (AWS ECS, Kubernetes, DigitalOcean, bare metal).
+LinkFlow is production-ready with automated deployment, monitoring, and scaling.
 
-### Production Mode (Nginx + SSL)
-1. Add SSL certs to `infra/nginx/ssl`.
-2. Run:
-```bash
-make prod-up
-```
+### Production Features
+- ✅ Automated deployment scripts
+- ✅ SSL/TLS with Nginx reverse proxy
+- ✅ Health monitoring and alerting
+- ✅ Database backup and restoration
+- ✅ Horizontal scaling support
+- ✅ Security hardening
+- ✅ Performance optimization
+
+### Deployment Options
+- **Docker Compose**: Single-server deployment (recommended for < 10K workflows/day)
+- **Kubernetes**: Multi-node with auto-scaling (Helm charts available)
+- **Cloud Platforms**: AWS ECS, Google Cloud Run, Azure Container Instances
+
+📖 **See [Production Guide](docs/05-deployment/09-production-guide.md) for complete deployment instructions**
 
 ### CI/CD Pipeline
 - **Lint/Static Analysis**: Pint (PHP), golangci-lint (Go)
 - **Tests**: Pest (PHP), go test -race (Go)
 - **Security**: Trivy (FS scan), Govulncheck (Go), Composer Audit (PHP)
-- **Build**: Multi-stage Docker builds push to GHCR
+- **Build**: Multi-stage Docker builds
 
 ## 🤝 Contributing
 

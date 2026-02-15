@@ -10,7 +10,7 @@ Welcome to the LinkFlow documentation. This guide will help you understand, depl
 | [Architecture](./02-architecture/) | System design, components, and data flow |
 | [Guides](./03-guides/) | How-to guides for common tasks |
 | [API Reference](./04-api-reference/) | OpenAPI spec, authentication, endpoints |
-| [Deployment](./05-deployment/) | Docker, Kubernetes, and production setup |
+| [Deployment](./05-deployment/) | Docker, Kubernetes, production setup, and scaling |
 | [Operations](./06-operations/) | Runbooks, monitoring, and incident response |
 | [Development](./07-development/) | Contributing, testing, and code style |
 | [ADRs](./adr/) | Architecture Decision Records |
@@ -60,19 +60,38 @@ LinkFlow is a high-performance workflow automation platform that enables you to:
 
 ## Quick Start
 
+### Development
 ```bash
-# Clone the repository
+# Clone and setup
 git clone https://github.com/your-org/lnkflow.git
 cd lnkflow
-
-# Start everything with Docker
 make setup
-make start
 
-# Access the services
+# Start development stack
+make dev
+
+# Run migrations and seed
+make migrate
+make seed
+
+# Access services
 # API: http://localhost:8000
 # Engine: http://localhost:8080
 ```
+
+### Production
+```bash
+# Validate production setup
+make prod-setup
+
+# Deploy to production
+./scripts/deploy-production.sh
+
+# Verify health
+make prod-health
+```
+
+📖 **See [Quick Start Guide](./05-deployment/11-quick-start-guide.md) for detailed instructions**
 
 ## Technology Stack
 

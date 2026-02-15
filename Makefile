@@ -8,7 +8,8 @@
 .PHONY: help setup dev dev-build dev-down dev-full prod prod-build prod-down prod-full \
         test-up test-down logs ps migrate migrate-fresh seed clean health \
         shell-api shell-db shell-redis api-cache \
-        prod-scale-api prod-scale-workers prod-scale-queue
+        prod-scale-api prod-scale-workers prod-scale-queue \
+        prod-setup prod-health backup restore optimize security-check
 
 COMPOSE_PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml
 COMPOSE_TEST := docker compose -f docker-compose.yml -f docker-compose.test.yml
@@ -142,3 +143,59 @@ clean: ## Stop everything and remove volumes (DESTRUCTIVE)
 
 restart: ## Restart all services
 	docker compose restart
+
+# ============================================
+# Production Operations
+# ============================================
+prod-setup: ## Run production setup script
+	@./scripts/production-setup.sh
+
+prod-health: ## Comprehensive production health check
+	@./scripts/health-check.sh
+
+backup: ## Backup database
+	@./scripts/backup-database.sh
+
+restore: ## Restore database (usage: make restore FILE=backups/backup.sql.gz)
+	@./scripts/restore-database.sh $(FILE)
+
+optimize: ## Optimize Laravel for production
+	docker compose exec api php artisan config:cache
+	docker compose exec api php artisan route:cache
+	docker compose exec api php artisan view:cache
+	docker compose exec api php artisan event:cache
+	@echo "✅ Laravel optimized for production"
+
+security-check: ## Run security checks
+	@echo "🔒 Running security checks..."
+	@echo ""
+	@echo "Checking secrets strength..."
+	@grep -E "^(POSTGRES_PASSWORD|REDIS_PASSWORD|LINKFLOW_SECRET|JWT_SECRET|APP_KEY)=" .env | while read line; do \
+		key=$$(echo $$line | cut -d= -f1); \
+		val=$$(echo $$line | cut -d= -f2); \
+		len=$${#val}; \
+		if [ $$len -lt 32 ]; then \
+			echo "⚠️  $$key is too short ($$len chars, min 32)"; \
+		else \
+			echo "✅ $$key is strong ($$len chars)"; \
+		fi; \
+	done
+	@echo ""
+	@echo "Checking exposed ports..."
+	@if docker compose ps --format json | grep -q '"PublishedPort":5432'; then \
+		echo "⚠️  PostgreSQL port 5432 is exposed"; \
+	else \
+		echo "✅ PostgreSQL port is not exposed"; \
+	fi
+	@if docker compose ps --format json | grep -q '"PublishedPort":6379'; then \
+		echo "⚠️  Redis port 6379 is exposed"; \
+	else \
+		echo "✅ Redis port is not exposed"; \
+	fi
+	@echo ""
+	@echo "Checking Laravel debug mode..."
+	@if grep -q "APP_DEBUG=false" apps/api/.env.docker; then \
+		echo "✅ APP_DEBUG is false"; \
+	else \
+		echo "⚠️  APP_DEBUG should be false in production"; \
+	fi
