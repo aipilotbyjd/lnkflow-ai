@@ -20,7 +20,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-linkflow}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init:/docker-entrypoint-initdb.d:ro
@@ -40,6 +40,10 @@ services:
         -c maintenance_work_mem=128MB
         -c effective_cache_size=512MB
         -c log_min_duration_statement=1000
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/postgresql
     logging:
       driver: json-file
       options:
@@ -54,7 +58,7 @@ services:
     container_name: linkflow-redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     command: >
@@ -65,12 +69,15 @@ services:
         --maxmemory-policy noeviction
         --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      test: [ "CMD-SHELL", "REDISCLI_AUTH=$REDIS_PASSWORD redis-cli ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - linkflow
+    read_only: true
+    tmpfs:
+      - /tmp
     logging:
       driver: json-file
       options:
@@ -99,6 +106,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
     profiles:
       - production
     logging:

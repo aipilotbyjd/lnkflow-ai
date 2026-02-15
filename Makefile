@@ -98,7 +98,7 @@ shell-db: ## Open PostgreSQL shell
 	docker compose exec postgres psql -U $${POSTGRES_USER:-linkflow} -d $${POSTGRES_DB:-linkflow}
 
 shell-redis: ## Open Redis CLI
-	docker compose exec redis redis-cli -a $${REDIS_PASSWORD}
+	docker compose exec -e REDISCLI_AUTH=$${REDIS_PASSWORD} redis redis-cli
 
 api-cache: ## Clear and rebuild Laravel caches
 	docker compose exec api php artisan optimize:clear

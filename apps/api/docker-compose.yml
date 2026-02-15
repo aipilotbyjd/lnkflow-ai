@@ -17,7 +17,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
+      target: development # Change to 'production' for prod deployments
     container_name: linkflow-api
     restart: unless-stopped
     ports:
@@ -32,9 +32,14 @@ services:
       ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
       REDIS_QUEUE: workflows-default
     volumes:
-      - .:/var/www/html
+      - .:/var/www/html # DEV ONLY - remove in production
     networks:
       - linkflow
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/v1/health" ]
       interval: 30s
@@ -66,7 +71,7 @@ services:
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
       ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
     volumes:
-      - .:/var/www/html
+      - .:/var/www/html # DEV ONLY - remove in production
     command: php artisan queue:work redis --queue=workflows-high,workflows-default,workflows-low,default --sleep=3 --tries=3 --max-time=3600 --max-jobs=1000 --verbose
     healthcheck:
       test: [ "CMD-SHELL", "ps aux | grep -v grep | grep 'queue:work' || exit 1" ]
@@ -74,6 +79,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     depends_on:
       api:
         condition: service_healthy
@@ -104,7 +114,7 @@ services:
       LINKFLOW_ENGINE_SECRET: ${LINKFLOW_SECRET}
       ENGINE_PARTITION_COUNT: ${ENGINE_PARTITION_COUNT:-16}
     volumes:
-      - .:/var/www/html
+      - .:/var/www/html # DEV ONLY - remove in production
     command: >
       sh -c "while true; do php artisan schedule:run --verbose; sleep 60; done"
     healthcheck:
@@ -113,6 +123,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
     depends_on:
       api:
         condition: service_healthy
