@@ -15,20 +15,33 @@ This file contains instructions for AI assistants working on the LinkFlow codeba
 ## Quick Commands
 
 ```bash
-# Start everything
-make start
+# Development (auto-loads docker-compose.override.yml)
+make dev          # Start dev stack
+make dev-down     # Stop dev stack
+make dev-build    # Build and start
+make dev-full     # Start with scheduler + edge
 
-# Stop everything
-make stop
+# Production (explicit -f flag)
+make prod         # Start production stack
+make prod-down    # Stop production stack
+make prod-build   # Build and start production
 
-# Run all tests
-make test
+# Scaling
+make prod-scale-api N=3
+make prod-scale-workers N=5
+make prod-scale-queue N=3
 
-# Format code
-make format
+# Database
+make migrate      # Run migrations
+make seed         # Seed database
 
-# Lint code
-make lint
+# Utilities
+make ps           # Service status
+make logs         # Tail logs
+make health       # Health check
+make shell-api    # API shell
+make shell-db     # Postgres shell
+make clean        # Remove everything (DESTRUCTIVE)
 ```
 
 ### API Commands (Laravel)
@@ -136,13 +149,18 @@ Client -> Laravel API (8000) -> Go Engine Frontend (8080)
 
 ## Environment Variables
 
-Critical secrets (must be changed in production):
+All secrets are in a single root `.env` file (from `.env.example`).
+Laravel-specific config lives in `apps/api/.env.docker` (from `.env.docker.example`).
+
+Critical secrets (must be set before starting):
 
 | Variable | Purpose |
 |----------|---------|
-| `JWT_SECRET` | JWT token signing (min 32 chars) |
-| `LINKFLOW_SECRET` | Engine-to-API callback authentication |
 | `POSTGRES_PASSWORD` | Database password |
+| `REDIS_PASSWORD` | Redis authentication |
+| `LINKFLOW_SECRET` | Engine-to-API callback authentication |
+| `JWT_SECRET` | JWT token signing (min 32 chars) |
+| `APP_KEY` | Laravel encryption key |
 
 ## Documentation
 

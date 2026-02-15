@@ -1,0 +1,100 @@
+# LinkFlow - Development Overrides (Auto-loaded)
+# This file is automatically loaded by `docker compose up` when no -f flag is specified.
+# It layers dev-specific config on top of docker-compose.yml.
+#
+# Usage: docker compose up -d  (that's it — no flags needed)
+
+services:
+  # ============================================
+  # Infrastructure — expose ports for local access
+  # ============================================
+  postgres:
+    container_name: linkflow-postgres
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+
+  redis:
+    container_name: linkflow-redis
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+
+  # ============================================
+  # Laravel API — dev target, volume mounts, artisan serve
+  # ============================================
+  api:
+    container_name: linkflow-api
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/var/www/html
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      LOG_LEVEL: debug
+
+  queue:
+    container_name: linkflow-queue
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./apps/api:/var/www/html
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      LOG_LEVEL: debug
+
+  scheduler:
+    container_name: linkflow-scheduler
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./apps/api:/var/www/html
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      LOG_LEVEL: debug
+
+  # ============================================
+  # Go Engine — expose ports for debugging
+  # ============================================
+  frontend:
+    container_name: linkflow-frontend
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      LOG_LEVEL: debug
+
+  history:
+    container_name: linkflow-history
+    environment:
+      LOG_LEVEL: debug
+
+  matching:
+    container_name: linkflow-matching
+    environment:
+      LOG_LEVEL: debug
+
+  worker:
+    container_name: linkflow-worker
+    environment:
+      LOG_LEVEL: debug
+      NUM_WORKERS: "2"
+
+  timer:
+    container_name: linkflow-timer
+    environment:
+      LOG_LEVEL: debug
+
+  visibility:
+    container_name: linkflow-visibility
+    environment:
+      LOG_LEVEL: debug

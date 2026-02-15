@@ -1,38 +1,46 @@
 # LinkFlow Infrastructure
 
-Shared infrastructure stack for LinkFlow services.
+Shared infrastructure components for LinkFlow services.
 
 ## Services
 
-| Service | Container Name | Port (Host) | Description |
-|---|---|---|---|
-| **PostgreSQL** | `linkflow-postgres` | 5432 | Primary database for API and Engine |
-| **Redis** | `linkflow-redis` | 6379 | Queue, Cache, and Pub/Sub |
-| **Nginx** | `linkflow-nginx` | 80 / 443 | Reverse proxy and TLS termination (Production profile) |
+| Service | Port (Dev) | Description |
+|---|---|---|
+| **PostgreSQL 16** | 5432 | Primary database for API and Engine |
+| **Redis 7** | 6379 | Queue, Cache, and Pub/Sub |
+| **Nginx** | 80 / 443 | Reverse proxy and TLS termination (production only) |
 
-## Quick Start
+## Directory Structure
 
-We recommend using the root `Makefile` for management, but you can run this stack independently.
-
-### 1. Setup Environment
-Copy the example environment file and set secure passwords:
-
-```bash
-cp .env.example .env
-# Edit .env and set POSTGRES_PASSWORD, REDIS_PASSWORD, etc.
+```
+infra/
+├── init/01-init.sql              # Database initialization (schemas, extensions)
+├── nginx/
+│   ├── nginx.conf                # Production nginx (SSL, rate limits)
+│   ├── nginx.dev.conf            # Development nginx (HTTP only)
+│   └── ssl/                      # SSL certificates (production)
+└── postgres/
+    └── postgresql.prod.conf      # Production-tuned Postgres config
 ```
 
-### 2. Run via Root Makefile (Recommended)
-From the project root:
+## Usage
+
+All infrastructure is managed from the **project root** via Docker Compose layering:
 
 ```bash
-make infra-up
+# Development (from project root)
+make dev              # Starts postgres, redis, and all services
+
+# Production (from project root)
+make prod             # Starts with nginx, SSL, production Postgres config
+
+# Shells
+make shell-db         # PostgreSQL shell
+make shell-redis      # Redis CLI
 ```
 
-### 3. Run Manually
-```bash
-docker-compose up -d
-```
+> **Note**: There is no `docker-compose.yml` in this directory. All services are defined
+> in the root `docker-compose.yml` and layered with environment-specific overrides.
 
 ## Production Mode (Nginx)
 
@@ -41,14 +49,11 @@ To enable Nginx with TLS termination:
 1. Place your SSL certificates in `nginx/ssl/`:
    - `fullchain.pem`
    - `privkey.pem`
-2. Start with the production profile:
+2. Start with the production compose:
 
 ```bash
-# Via Makefile
-make prod-up
-
-# Or manually
-docker-compose --profile production up -d
+make prod
+# Or: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ## Data Persistence
@@ -56,4 +61,13 @@ docker-compose --profile production up -d
 Docker volumes ensure data survives container restarts:
 - `linkflow_postgres_data`: Database files
 - `linkflow_redis_data`: Redis persistence
-- `linkflow_nginx_logs`: Web server logs
+- `linkflow_nginx_logs`: Web server logs (production)
+
+## Production Postgres Tuning
+
+The `postgres/postgresql.prod.conf` is mounted in production and includes:
+- Memory: 1GB shared_buffers, 3GB effective_cache_size
+- WAL: 64MB buffers, 2GB max WAL size
+- Parallel queries: up to 4 workers per gather
+- Autovacuum: tuned for high-throughput workloads
+- SSL enabled

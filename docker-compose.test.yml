@@ -1,0 +1,83 @@
+# LinkFlow - CI/CD Test Overrides
+# Ephemeral stack for automated testing
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml down -v  # cleanup
+#
+# Note: Use `down -v` to remove volumes between test runs for a clean slate.
+# Docker Compose override files merge (not replace) list values like volumes/tmpfs,
+# so we can't swap the named volume for tmpfs here. The -v flag handles cleanup.
+
+services:
+  postgres:
+    container_name: linkflow-test-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-linkflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password}
+      POSTGRES_DB: ${POSTGRES_DB:-linkflow_test}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+
+  redis:
+    container_name: linkflow-test-redis
+    ports:
+      - "6379:6379"
+
+  api:
+    container_name: linkflow-test-api
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: "true"
+      LOG_LEVEL: debug
+      DB_DATABASE: ${POSTGRES_DB:-linkflow_test}
+
+  queue:
+    container_name: linkflow-test-queue
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: development
+    environment:
+      APP_ENV: testing
+      DB_DATABASE: ${POSTGRES_DB:-linkflow_test}
+
+  frontend:
+    container_name: linkflow-test-frontend
+    ports:
+      - "8080:8080"
+    environment:
+      LOG_LEVEL: debug
+
+  history:
+    container_name: linkflow-test-history
+    environment:
+      LOG_LEVEL: debug
+
+  matching:
+    container_name: linkflow-test-matching
+    environment:
+      LOG_LEVEL: debug
+
+  worker:
+    container_name: linkflow-test-worker
+    environment:
+      LOG_LEVEL: debug
+      NUM_WORKERS: "1"
+
+  timer:
+    container_name: linkflow-test-timer
+    environment:
+      LOG_LEVEL: debug
+
+  visibility:
+    container_name: linkflow-test-visibility
+    environment:
+      LOG_LEVEL: debug
