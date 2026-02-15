@@ -1,0 +1,84 @@
+{
+  "name": "LinkFlow Daily Operations Pack",
+  "description": "A collection of 4 daily workflows: Morning Brief, Sales Lead, Invoice Chaser, and DevOps Watchdog.",
+  "workflows": [
+    {
+      "name": "🌅 Morning Briefing",
+      "trigger_type": "schedule",
+      "nodes": [
+        {
+          "id": "1",
+          "type": "trigger_schedule",
+          "position": { "x": 0, "y": 0 },
+          "data": { "config": { "cron": "0 8 * * *" } },
+          "label": "8:00 AM"
+        },
+        {
+          "id": "2",
+          "type": "action_http_request",
+          "position": { "x": 200, "y": 0 },
+          "data": { "config": { "method": "GET", "url": "https://hacker-news.firebaseio.com/v0/topstories.json" } },
+          "label": "Fetch Top Stories"
+        },
+        {
+          "id": "3",
+          "type": "action_ai",
+          "position": { "x": 400, "y": 0 },
+          "data": { "config": { "prompt": "Summarize these stories into 3 key bullet points for a tech executive: {{ $node.prev.output }}" } },
+          "label": "AI Summary"
+        },
+        {
+          "id": "4",
+          "type": "action_email",
+          "position": { "x": 600, "y": 0 },
+          "data": { "config": { "to": "me@example.com", "subject": "Daily Briefing", "body": "{{ $node.prev.output }}" } },
+          "label": "Send Email"
+        }
+      ],
+      "edges": [
+        { "id": "e1", "source": "1", "target": "2" },
+        { "id": "e2", "source": "2", "target": "3" },
+        { "id": "e3", "source": "3", "target": "4" }
+      ]
+    },
+    {
+      "name": "🚧 DevOps Watchdog",
+      "trigger_type": "schedule",
+      "nodes": [
+        {
+          "id": "1",
+          "type": "trigger_schedule",
+          "position": { "x": 0, "y": 0 },
+          "data": { "config": { "cron": "*/5 * * * *" } },
+          "label": "Every 5m"
+        },
+        {
+          "id": "2",
+          "type": "action_http_request",
+          "position": { "x": 200, "y": 0 },
+          "data": { "config": { "method": "GET", "url": "https://api.myapp.com/health" } },
+          "label": "Ping API"
+        },
+        {
+          "id": "3",
+          "type": "condition",
+          "position": { "x": 400, "y": 0 },
+          "data": { "config": { "expression": "{{ $node.prev.output.status }} != 200" } },
+          "label": "Is Down?"
+        },
+        {
+          "id": "4",
+          "type": "action_twilio",
+          "position": { "x": 600, "y": -100 },
+          "data": { "config": { "to": "+15550101", "message": "🚨 API DOWN! Status: {{ $node['Ping API'].output.status }}" } },
+          "label": "SMS Alert"
+        }
+      ],
+      "edges": [
+        { "id": "e1", "source": "1", "target": "2" },
+        { "id": "e2", "source": "2", "target": "3" },
+        { "id": "e3", "source": "3", "target": "4", "handle": "true" }
+      ]
+    }
+  ]
+}

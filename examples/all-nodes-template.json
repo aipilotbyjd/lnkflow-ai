@@ -1,0 +1,128 @@
+{
+  "name": "LinkFlow All-Stars Template",
+  "description": "A showcase of every available node type in LinkFlow.",
+  "trigger_type": "manual",
+  "nodes": [
+    {
+      "id": "1",
+      "type": "trigger_manual",
+      "position": { "x": 0, "y": 0 },
+      "data": { "config": {} },
+      "label": "Manual Start"
+    },
+    {
+      "id": "2",
+      "type": "trigger_schedule",
+      "position": { "x": 0, "y": 150 },
+      "data": { "config": { "cron": "0 9 * * *" } },
+      "label": "9 AM Daily"
+    },
+    {
+      "id": "3",
+      "type": "trigger_webhook",
+      "position": { "x": 0, "y": 300 },
+      "data": { "config": { "path": "my-hook", "method": "POST" } },
+      "label": "Webhook"
+    },
+    {
+      "id": "4",
+      "type": "action_http_request",
+      "position": { "x": 300, "y": 0 },
+      "data": {
+        "config": {
+          "method": "GET",
+          "url": "https://httpbin.org/json"
+        }
+      },
+      "label": "Fetch Data"
+    },
+    {
+      "id": "5",
+      "type": "action_ai",
+      "position": { "x": 300, "y": 150 },
+      "data": {
+        "config": {
+          "prompt": "Summarize this: {{ $node.prev.output }}"
+        }
+      },
+      "label": "AI Thinker"
+    },
+    {
+      "id": "6",
+      "type": "condition",
+      "position": { "x": 600, "y": 0 },
+      "data": {
+        "config": {
+          "expression": "{{ $node.prev.output.status }} == 200"
+        }
+      },
+      "label": "Check Success"
+    },
+    {
+      "id": "7",
+      "type": "action_slack",
+      "position": { "x": 900, "y": -100 },
+      "data": {
+        "config": {
+          "channel": "#general",
+          "message": "Success!"
+        }
+      },
+      "label": "Notify Slack"
+    },
+    {
+      "id": "8",
+      "type": "action_email",
+      "position": { "x": 900, "y": 100 },
+      "data": {
+        "config": {
+          "to": "admin@example.com",
+          "subject": "Alert",
+          "body": "Something happened."
+        }
+      },
+      "label": "Email Alert"
+    },
+    {
+      "id": "9",
+      "type": "loop",
+      "position": { "x": 300, "y": 300 },
+      "data": {
+        "config": {
+          "items_field": "items"
+        }
+      },
+      "label": "Loop Items"
+    },
+    {
+      "id": "10",
+      "type": "action_database",
+      "position": { "x": 300, "y": 450 },
+      "data": {
+        "config": {
+          "query": "SELECT * FROM users"
+        }
+      },
+      "label": "DB Query"
+    },
+    {
+      "id": "11",
+      "type": "output_log",
+      "position": { "x": 1200, "y": 0 },
+      "data": {
+        "config": {
+          "label": "Final Output"
+        }
+      },
+      "label": "Logger"
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "1", "target": "4" },
+    { "id": "e2", "source": "4", "target": "6" },
+    { "id": "e3", "source": "6", "target": "7", "handle": "true" },
+    { "id": "e4", "source": "6", "target": "8", "handle": "false" },
+    { "id": "e5", "source": "7", "target": "11" },
+    { "id": "e6", "source": "8", "target": "11" }
+  ]
+}
