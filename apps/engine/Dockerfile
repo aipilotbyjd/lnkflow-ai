@@ -9,7 +9,11 @@ FROM golang:1.24-alpine AS builder
 ARG SERVICE=frontend
 ARG VERSION=dev
 
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apk add --no-cache git ca-certificates tzdata curl
+
+# Install buf CLI for protobuf generation
+RUN curl -sSL https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-$(uname -m) -o /usr/local/bin/buf && \
+    chmod +x /usr/local/bin/buf
 
 WORKDIR /app
 
@@ -19,6 +23,9 @@ RUN go mod download
 
 # Copy source code
 COPY . .
+
+# Generate protobuf code
+RUN buf generate
 
 # Build the service (static binary, stripped)
 ARG TARGETARCH=amd64
