@@ -740,9 +740,10 @@ func (s *Service) sendLegacyProgress(payload *executor.JobPayload, currentNode s
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-LinkFlow-Timestamp", time.Now().UTC().Format(time.RFC3339))
+	ts := time.Now().UTC().Format(time.RFC3339)
+	req.Header.Set("X-LinkFlow-Timestamp", ts)
 	if s.callbackKey != "" {
-		req.Header.Set("X-LinkFlow-Signature", signPayload(bodyBytes, s.callbackKey))
+		req.Header.Set("X-LinkFlow-Signature", signPayload(ts, bodyBytes, s.callbackKey))
 	}
 
 	respHTTP, err := s.callbackHTTP.Do(req)
@@ -760,9 +761,10 @@ func (s *Service) postLegacyCallback(ctx context.Context, callbackURL string, bo
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-LinkFlow-Timestamp", time.Now().UTC().Format(time.RFC3339))
+	ts := time.Now().UTC().Format(time.RFC3339)
+	req.Header.Set("X-LinkFlow-Timestamp", ts)
 	if s.callbackKey != "" {
-		req.Header.Set("X-LinkFlow-Signature", signPayload(body, s.callbackKey))
+		req.Header.Set("X-LinkFlow-Signature", signPayload(ts, body, s.callbackKey))
 	}
 
 	resp, err := s.callbackHTTP.Do(req)
@@ -779,8 +781,10 @@ func (s *Service) postLegacyCallback(ctx context.Context, callbackURL string, bo
 	return nil
 }
 
-func signPayload(body []byte, secret string) string {
+func signPayload(timestamp string, body []byte, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte("."))
 	mac.Write(body)
 	return hex.EncodeToString(mac.Sum(nil))
 }

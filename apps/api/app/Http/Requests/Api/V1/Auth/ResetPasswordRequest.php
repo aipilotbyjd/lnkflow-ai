@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Api\V1\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Password;
 
 class ResetPasswordRequest extends FormRequest
 {
@@ -18,8 +19,8 @@ class ResetPasswordRequest extends FormRequest
     {
         return [
             'token' => ['required', 'string'],
-            'email' => ['required', 'email', 'exists:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()->uncompromised(), 'confirmed'],
         ];
     }
 
@@ -32,7 +33,6 @@ class ResetPasswordRequest extends FormRequest
             'token.required' => 'Reset token is required.',
             'email.required' => 'Email is required.',
             'email.email' => 'Please provide a valid email address.',
-            'email.exists' => 'No account found with this email address.',
             'password.required' => 'Password is required.',
             'password.min' => 'Password must be at least 8 characters.',
             'password.confirmed' => 'Password confirmation does not match.',

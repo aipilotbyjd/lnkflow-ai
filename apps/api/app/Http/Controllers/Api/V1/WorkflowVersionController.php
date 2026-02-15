@@ -29,7 +29,7 @@ class WorkflowVersionController extends Controller
         $versions = $workflow->versions()
             ->with('creator')
             ->orderByDesc('version_number')
-            ->paginate($request->integer('per_page', 20));
+            ->paginate(min($request->integer('per_page', 20), 100));
 
         return WorkflowVersionResource::collection($versions);
     }

@@ -40,7 +40,7 @@ class VerifyEngineCallbackSignature
         }
 
         $payload = $request->getContent();
-        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+        $expectedSignature = hash_hmac('sha256', $timestamp . '.' . $payload, $secret);
 
         if (! hash_equals($expectedSignature, $signature)) {
             return $this->error('Invalid callback signature.', 401);

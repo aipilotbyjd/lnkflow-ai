@@ -44,7 +44,7 @@ class WorkflowTemplateController extends Controller
             $query->featured();
         }
 
-        $templates = $query->paginate($request->integer('per_page', 20));
+        $templates = $query->paginate(min($request->integer('per_page', 20), 100));
 
         return response()->json([
             'data' => $templates->map(fn ($t) => $this->formatTemplate($t)),

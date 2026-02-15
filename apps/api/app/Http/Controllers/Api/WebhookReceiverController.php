@@ -114,8 +114,8 @@ class WebhookReceiverController extends Controller
         $expectedUsername = $config['username'] ?? '';
         $expectedPassword = $config['password'] ?? '';
 
-        return $request->getUser() === $expectedUsername
-            && $request->getPassword() === $expectedPassword;
+        return hash_equals((string) $expectedUsername, (string) $request->getUser())
+            && hash_equals((string) $expectedPassword, (string) $request->getPassword());
     }
 
     /**
@@ -125,7 +125,7 @@ class WebhookReceiverController extends Controller
     {
         $expectedToken = $config['token'] ?? '';
 
-        return $request->bearerToken() === $expectedToken;
+        return hash_equals((string) $expectedToken, (string) $request->bearerToken());
     }
 
     private function checkRateLimit(Webhook $webhook, Request $request): bool

@@ -261,7 +261,7 @@ class StripeWebhookController extends Controller
             'past_due' => SubscriptionStatus::PastDue,
             'canceled', 'unpaid' => SubscriptionStatus::Canceled,
             'incomplete', 'incomplete_expired' => SubscriptionStatus::Incomplete,
-            default => SubscriptionStatus::Active,
+            default => SubscriptionStatus::Incomplete,
         };
     }
 }

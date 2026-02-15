@@ -47,7 +47,7 @@ class ExecutionController extends Controller
             $query->where('mode', $request->input('mode'));
         }
 
-        $executions = $query->latest()->paginate($request->input('per_page', 20));
+        $executions = $query->latest()->paginate(min((int) $request->input('per_page', 20), 100));
 
         return ExecutionResource::collection($executions);
     }
@@ -267,7 +267,7 @@ class ExecutionController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        $executions = $query->latest()->paginate($request->input('per_page', 20));
+        $executions = $query->latest()->paginate(min((int) $request->input('per_page', 20), 100));
 
         return ExecutionResource::collection($executions);
     }

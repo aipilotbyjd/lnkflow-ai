@@ -159,15 +159,10 @@ class AuthController extends Controller
             $request->only('email')
         );
 
-        if ($status === Password::RESET_LINK_SENT) {
-            return response()->json([
-                'message' => 'Password reset link sent to your email.',
-            ]);
-        }
-
+        // Always return the same message to prevent account enumeration
         return response()->json([
-            'message' => __($status),
-        ], 400);
+            'message' => 'If an account with that email exists, a password reset link has been sent.',
+        ]);
     }
 
     public function resetPassword(ResetPasswordRequest $request): JsonResponse

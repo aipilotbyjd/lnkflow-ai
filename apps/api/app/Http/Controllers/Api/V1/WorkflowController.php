@@ -29,7 +29,7 @@ class WorkflowController extends Controller
         $workflows = $workspace->workflows()
             ->with('creator')
             ->latest()
-            ->paginate($request->input('per_page', 15));
+            ->paginate(min((int) $request->input('per_page', 15), 100));
 
         return WorkflowResource::collection($workflows);
     }

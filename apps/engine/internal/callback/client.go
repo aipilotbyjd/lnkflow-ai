@@ -174,13 +174,14 @@ func (c *Client) Send(ctx context.Context, callbackURL string, payload *Callback
 	}
 
 	// Set headers
+	timestamp := payload.Timestamp.Format(time.RFC3339)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-LinkFlow-Event", string(payload.Event))
-	req.Header.Set("X-LinkFlow-Timestamp", payload.Timestamp.Format(time.RFC3339))
+	req.Header.Set("X-LinkFlow-Timestamp", timestamp)
 
 	// Sign the request if secret key is set
 	if c.secretKey != "" {
-		signature := c.sign(body)
+		signature := c.sign(timestamp, body)
 		req.Header.Set("X-LinkFlow-Signature", signature)
 	}
 
@@ -216,9 +217,11 @@ func (c *Client) Send(ctx context.Context, callbackURL string, payload *Callback
 	return nil
 }
 
-// sign generates HMAC-SHA256 signature for the payload.
-func (c *Client) sign(payload []byte) string {
+// sign generates HMAC-SHA256 signature over "timestamp.payload".
+func (c *Client) sign(timestamp string, payload []byte) string {
 	h := hmac.New(sha256.New, []byte(c.secretKey))
+	h.Write([]byte(timestamp))
+	h.Write([]byte("."))
 	h.Write(payload)
 	return hex.EncodeToString(h.Sum(nil))
 }

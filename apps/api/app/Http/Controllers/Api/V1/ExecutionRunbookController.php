@@ -25,7 +25,7 @@ class ExecutionRunbookController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        return ExecutionRunbookResource::collection($query->paginate($request->integer('per_page', 20)));
+        return ExecutionRunbookResource::collection($query->paginate(min($request->integer('per_page', 20), 100)));
     }
 
     public function show(Request $request, Workspace $workspace, ExecutionRunbook $runbook): JsonResponse

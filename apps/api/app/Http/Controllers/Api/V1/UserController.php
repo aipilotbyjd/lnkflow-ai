@@ -42,6 +42,9 @@ class UserController extends Controller
             'password' => Hash::make($request->validated('password')),
         ]);
 
+        $currentTokenId = $user->token()->id;
+        $user->tokens()->where('id', '!=', $currentTokenId)->delete();
+
         return response()->json([
             'message' => 'Password changed successfully.',
         ]);

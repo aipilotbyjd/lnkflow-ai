@@ -255,7 +255,7 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
             'status' => 'failed',
             'error' => [
                 'message' => $exception->getMessage(),
-                'trace' => $exception->getTraceAsString(),
+                'code' => $exception->getCode(),
             ],
             'finished_at' => now(),
         ]);
