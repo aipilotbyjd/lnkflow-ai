@@ -13,18 +13,18 @@ use App\Http\Resources\Api\V1\UserResource;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Services\Auth\PassportTokenException;
-use App\Services\Auth\PassportTokenService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Password;
 use Laravel\Passport\Passport;
 
 class AuthController extends Controller
 {
-    public function register(RegisterRequest $request, PassportTokenService $passportTokenService): JsonResponse
+    public function register(RegisterRequest $request): JsonResponse
     {
         $user = User::query()->create([
             'first_name' => $request->validated('first_name'),
@@ -55,14 +55,13 @@ class AuthController extends Controller
 
         $user->sendEmailVerificationNotification();
 
-        try {
-            $token = $passportTokenService->issueToken(
-                $user->email,
-                (string) $request->validated('password')
-            );
-        } catch (PassportTokenException $e) {
-            report($e);
+        // Issue tokens via Password Grant
+        $tokenResponse = $this->issuePasswordGrantToken(
+            $user->email,
+            (string) $request->validated('password')
+        );
 
+        if ($tokenResponse === null) {
             return response()->json([
                 'message' => 'User registered successfully, but token issuance failed.',
             ], 500);
@@ -71,70 +70,59 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'User registered successfully. Please check your email to verify your account.',
             'user' => new UserResource($user),
-            ...$token,
+            ...$tokenResponse,
         ], 201);
     }
 
-    public function login(LoginRequest $request, PassportTokenService $passportTokenService): JsonResponse
+    public function login(LoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
 
-        try {
-            $token = $passportTokenService->issueToken(
-                $validated['email'],
-                $validated['password']
-            );
-        } catch (PassportTokenException $e) {
-            if ($e->oauthError === 'invalid_grant') {
-                return response()->json([
-                    'message' => 'Invalid credentials.',
-                ], 401);
-            }
-
-            report($e);
-
-            return response()->json([
-                'message' => 'Unable to complete login.',
-            ], 500);
-        }
-
-        $user = User::query()->where('email', $validated['email'])->first();
-        if (! $user instanceof User) {
+        if (! Auth::attempt($request->only('email', 'password'))) {
             return response()->json([
                 'message' => 'Invalid credentials.',
             ], 401);
         }
 
-        return response()->json([
-            'message' => 'Login successful.',
-            'user' => new UserResource($user),
-            ...$token,
-        ]);
-    }
+        $user = Auth::user();
 
-    public function refreshToken(RefreshTokenRequest $request, PassportTokenService $passportTokenService): JsonResponse
-    {
-        try {
-            $token = $passportTokenService->refreshToken(
-                (string) $request->validated('refresh_token')
-            );
-        } catch (PassportTokenException $e) {
-            if ($e->oauthError === 'invalid_grant') {
-                return response()->json([
-                    'message' => 'Invalid or expired refresh token.',
-                ], 401);
-            }
+        $tokenResponse = $this->issuePasswordGrantToken(
+            $validated['email'],
+            $validated['password']
+        );
 
-            report($e);
-
+        if ($tokenResponse === null) {
             return response()->json([
-                'message' => 'Unable to refresh access token.',
+                'message' => 'Unable to complete login.',
             ], 500);
         }
 
         return response()->json([
+            'message' => 'Login successful.',
+            'user' => new UserResource($user),
+            ...$tokenResponse,
+        ]);
+    }
+
+    public function refreshToken(RefreshTokenRequest $request): JsonResponse
+    {
+        $response = Http::asForm()->post(url('/oauth/token'), [
+            'grant_type' => 'refresh_token',
+            'refresh_token' => $request->validated('refresh_token'),
+            'client_id' => config('passport.password_client_id'),
+            'client_secret' => config('passport.password_client_secret'),
+            'scope' => '',
+        ]);
+
+        if ($response->failed()) {
+            return response()->json([
+                'message' => 'Invalid or expired refresh token.',
+            ], 401);
+        }
+
+        return response()->json([
             'message' => 'Token refreshed successfully.',
-            ...$token,
+            ...$response->json(),
         ]);
     }
 
@@ -190,6 +178,9 @@ class AuthController extends Controller
                 $user->forceFill([
                     'password' => Hash::make($password),
                 ])->save();
+
+                // Revoke all existing tokens on password reset
+                $user->tokens()->delete();
             }
         );
 
@@ -245,5 +236,43 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Verification email sent.',
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Private Helpers
+    |--------------------------------------------------------------------------
+    */
+
+    /**
+     * Issue access + refresh tokens via Passport's Password Grant.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function issuePasswordGrantToken(string $email, string $password): ?array
+    {
+        $response = Http::asForm()->post(url('/oauth/token'), [
+            'grant_type' => 'password',
+            'client_id' => config('passport.password_client_id'),
+            'client_secret' => config('passport.password_client_secret'),
+            'username' => $email,
+            'password' => $password,
+            'scope' => '',
+        ]);
+
+        if ($response->failed()) {
+            report('Passport token issuance failed: '.$response->body());
+
+            return null;
+        }
+
+        $data = $response->json();
+
+        return [
+            'access_token' => $data['access_token'],
+            'refresh_token' => $data['refresh_token'] ?? null,
+            'token_type' => $data['token_type'],
+            'expires_in' => $data['expires_in'],
+        ];
     }
 }

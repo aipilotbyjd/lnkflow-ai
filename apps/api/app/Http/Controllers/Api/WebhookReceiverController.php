@@ -103,7 +103,7 @@ class WebhookReceiverController extends Controller
         $headerName = $config['header_name'] ?? 'X-Webhook-Secret';
         $expectedValue = $config['header_value'] ?? '';
 
-        return $request->header($headerName) === $expectedValue;
+        return hash_equals((string) $expectedValue, (string) $request->header($headerName));
     }
 
     /**

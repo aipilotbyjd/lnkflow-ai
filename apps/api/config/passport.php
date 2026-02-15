@@ -43,4 +43,20 @@ return [
 
     'connection' => env('PASSPORT_CONNECTION'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Password Grant Client
+    |--------------------------------------------------------------------------
+    |
+    | These credentials are used by the AuthController to issue access and
+    | refresh tokens via Passport's Password Grant flow. Generate them with:
+    |
+    |   php artisan passport:client --password
+    |
+    */
+
+    'password_client_id' => env('PASSPORT_PASSWORD_CLIENT_ID'),
+
+    'password_client_secret' => env('PASSPORT_PASSWORD_CLIENT_SECRET'),
+
 ];
