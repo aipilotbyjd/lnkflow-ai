@@ -51,8 +51,14 @@ WORKDIR /var/www/html
 # ============================================
 FROM base AS development
 
-# Install dev tools
-RUN apk add --no-cache bash vim
+# Install dev tools + nginx
+RUN apk add --no-cache bash vim nginx
+
+# Copy nginx config
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+
+# Copy supervisor config for dev (nginx + php-fpm)
+COPY docker/supervisord-dev.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Don't copy code - we'll mount it as volume
 # Just ensure storage directories exist
@@ -62,13 +68,15 @@ RUN mkdir -p storage/framework/{sessions,views,cache} \
 
 EXPOSE 8000
 
-# Default command for development
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
 
 # ============================================
 # Production Stage
 # ============================================
 FROM base AS production
+
+# Install nginx
+RUN apk add --no-cache nginx
 
 # PHP production config
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
@@ -87,7 +95,8 @@ RUN echo "opcache.enable=1" >> "$PHP_INI_DIR/conf.d/opcache.ini" \
 # Security: hide PHP version
 RUN echo "expose_php=Off" >> "$PHP_INI_DIR/conf.d/security.ini"
 
-# Copy supervisor config
+# Copy nginx + supervisor configs
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Copy composer files first for caching
@@ -119,6 +128,6 @@ RUN chown -R www-data:www-data /var/www/html \
 
 USER www-data
 
-EXPOSE 9000
+EXPOSE 8000
 
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
