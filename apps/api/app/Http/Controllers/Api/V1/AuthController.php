@@ -78,13 +78,13 @@ class AuthController extends Controller
     {
         $validated = $request->validated();
 
-        if (! Auth::attempt($request->only('email', 'password'))) {
+        $user = User::query()->where('email', $validated['email'])->first();
+
+        if (! $user || ! Hash::check($validated['password'], $user->password)) {
             return response()->json([
                 'message' => 'Invalid credentials.',
             ], 401);
         }
-
-        $user = Auth::user();
 
         $tokenResponse = $this->issuePasswordGrantToken(
             $validated['email'],
