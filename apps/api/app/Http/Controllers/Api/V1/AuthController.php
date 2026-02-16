@@ -106,7 +106,7 @@ class AuthController extends Controller
 
     public function refreshToken(RefreshTokenRequest $request): JsonResponse
     {
-        $response = Http::asForm()->post(url('/oauth/token'), [
+        $response = Http::asForm()->post(env('APP_URL').'/oauth/token', [
             'grant_type' => 'refresh_token',
             'refresh_token' => $request->validated('refresh_token'),
             'client_id' => config('passport.password_client_id'),
@@ -246,7 +246,7 @@ class AuthController extends Controller
      */
     private function issuePasswordGrantToken(string $email, string $password): ?array
     {
-        $response = Http::asForm()->post(url('/oauth/token'), [
+        $response = Http::asForm()->post(env('APP_URL').'/oauth/token', [
             'grant_type' => 'password',
             'client_id' => config('passport.password_client_id'),
             'client_secret' => config('passport.password_client_secret'),
