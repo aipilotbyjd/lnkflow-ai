@@ -121,6 +121,8 @@ func (e *DelayExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 		}, nil
 	}
 
+	// TODO(perf): Long delays block a worker goroutine. At scale, delays should be
+	// handled by the Timer service (schedule a wake-up event) instead of blocking here.
 	// Cap maximum delay for safety (72 hours)
 	maxDelay := 72 * time.Hour
 	if delayDuration > maxDelay {

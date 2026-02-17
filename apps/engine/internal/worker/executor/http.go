@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"time"
 )
@@ -88,6 +90,33 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(config.Timeout)*time.Second)
 		defer cancel()
+	}
+
+	parsedURL, urlErr := url.Parse(config.URL)
+	if urlErr != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: "only http and https URLs are allowed",
+				Type:    ErrorTypeNonRetryable,
+			},
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
+		}, nil
+	}
+
+	if isBlockedAddress(parsedURL.Hostname()) {
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: "requests to private/internal networks are not allowed",
+				Type:    ErrorTypeNonRetryable,
+			},
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
+		}, nil
 	}
 
 	requestBytes, _ := json.Marshal(map[string]interface{}{
@@ -240,7 +269,8 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	const maxResponseBody = 10 * 1024 * 1024 // 10MB
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody+1))
 	if err != nil {
 		connectorAttempts = append(connectorAttempts, ConnectorAttempt{
 			NodeID:             req.NodeID,
@@ -260,6 +290,33 @@ func (e *HTTPExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Execu
 			Error: &ExecutionError{
 				Message: fmt.Sprintf("failed to read response body: %v", err),
 				Type:    ErrorTypeRetryable,
+			},
+			ConnectorAttempts:     connectorAttempts,
+			DeterministicFixtures: fixtures,
+			Logs:                  logs,
+			Duration:              time.Since(start),
+		}, nil
+	}
+
+	if int64(len(body)) > maxResponseBody {
+		connectorAttempts = append(connectorAttempts, ConnectorAttempt{
+			NodeID:             req.NodeID,
+			ConnectorKey:       "action_http_request",
+			ConnectorOperation: "request",
+			Provider:           "http",
+			AttemptNo:          req.Attempt,
+			IsRetry:            req.Attempt > 1,
+			Status:             "client_error",
+			StatusCode:         int32(resp.StatusCode),
+			ErrorCode:          "HTTP_RESPONSE_TOO_LARGE",
+			ErrorMessage:       fmt.Sprintf("response body exceeds %d bytes limit", maxResponseBody),
+			RequestFingerprint: requestFingerprint,
+			HappenedAt:         time.Now().UTC(),
+		})
+		return &ExecuteResponse{
+			Error: &ExecutionError{
+				Message: fmt.Sprintf("response body exceeds %d bytes limit", maxResponseBody),
+				Type:    ErrorTypeNonRetryable,
 			},
 			ConnectorAttempts:     connectorAttempts,
 			DeterministicFixtures: fixtures,
@@ -409,4 +466,26 @@ func canonicalHeaders(headers map[string]string) map[string]string {
 	}
 
 	return canonical
+}
+
+// isBlockedAddress checks if a resolved IP is in a private/reserved range (SSRF protection).
+func isBlockedAddress(host string) bool {
+	ips, err := net.LookupHost(host)
+	if err != nil {
+		return false // let the HTTP request fail naturally
+	}
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			continue
+		}
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return true
+		}
+		// Block metadata endpoints (169.254.169.254)
+		if ip.Equal(net.ParseIP("169.254.169.254")) {
+			return true
+		}
+	}
+	return false
 }

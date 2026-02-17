@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -58,6 +59,7 @@ type RedisConsumer struct {
 	service *Service
 	logger  *slog.Logger
 	config  ConsumerConfig
+	wg      sync.WaitGroup
 }
 
 type JobPayload struct {
@@ -105,8 +107,17 @@ func NewRedisConsumerWithConfig(client *redis.Client, service *Service, logger *
 
 func (c *RedisConsumer) Start(ctx context.Context) {
 	for i := 0; i < c.config.PartitionCount; i++ {
-		go c.consumePartition(ctx, i)
+		c.wg.Add(1)
+		go func(partition int) {
+			defer c.wg.Done()
+			c.consumePartition(ctx, partition)
+		}(i)
 	}
+}
+
+// Stop waits for all partition consumers to finish.
+func (c *RedisConsumer) Stop() {
+	c.wg.Wait()
 }
 
 func (c *RedisConsumer) consumePartition(ctx context.Context, partition int) {

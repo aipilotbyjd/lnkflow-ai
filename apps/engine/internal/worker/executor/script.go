@@ -52,52 +52,17 @@ func (e *ScriptExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exe
 		}, nil
 	}
 
-	// Parse input data
-	var inputData map[string]interface{}
-	if len(req.Input) > 0 {
-		if err := json.Unmarshal(req.Input, &inputData); err != nil {
-			inputData = make(map[string]interface{})
-		}
-	} else {
-		inputData = make(map[string]interface{})
-	}
-
 	logs = append(logs, LogEntry{
 		Timestamp: time.Now(),
-		Level:     "info",
-		Message:   fmt.Sprintf("script language: %s, code length: %d chars", config.Language, len(config.Code)),
-	})
-
-	// For now, script execution passes through input with metadata
-	// In production, this would use a sandboxed JS/WASM runtime
-	result := map[string]interface{}{
-		"input":        inputData,
-		"script_run":   true,
-		"executed_at":  time.Now().UTC().Format(time.RFC3339),
-		"node_id":      req.NodeID,
-		"code_preview": truncateString(config.Code, 100),
-	}
-
-	output, err := json.Marshal(result)
-	if err != nil {
-		return &ExecuteResponse{
-			Error: &ExecutionError{
-				Message: fmt.Sprintf("failed to marshal output: %v", err),
-				Type:    ErrorTypeNonRetryable,
-			},
-			Logs:     logs,
-			Duration: time.Since(start),
-		}, nil
-	}
-
-	logs = append(logs, LogEntry{
-		Timestamp: time.Now(),
-		Level:     "info",
-		Message:   "script execution completed successfully",
+		Level:     "warn",
+		Message:   fmt.Sprintf("script executor not yet available (language: %s, code length: %d chars)", config.Language, len(config.Code)),
 	})
 
 	return &ExecuteResponse{
-		Output:   output,
+		Error: &ExecutionError{
+			Message: "script execution is not yet available — sandboxed runtime required",
+			Type:    ErrorTypeNonRetryable,
+		},
 		Logs:     logs,
 		Duration: time.Since(start),
 	}, nil

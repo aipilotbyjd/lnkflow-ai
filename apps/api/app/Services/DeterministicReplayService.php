@@ -8,6 +8,7 @@ use App\Jobs\ExecuteWorkflowJob;
 use App\Models\Execution;
 use App\Models\ExecutionReplayPack;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class DeterministicReplayService
@@ -103,49 +104,57 @@ class DeterministicReplayService
 
         $workflow = $sourceExecution->workflow;
 
+        $deterministicWorkflowSnapshot = null;
         if (! $useLatestWorkflow && is_array($sourcePack->workflow_snapshot)) {
-            $snapshot = $sourcePack->workflow_snapshot;
-            $workflow->nodes = $snapshot['nodes'] ?? $workflow->nodes;
-            $workflow->edges = $snapshot['edges'] ?? $workflow->edges;
-            $workflow->settings = $snapshot['settings'] ?? $workflow->settings;
+            $deterministicWorkflowSnapshot = $sourcePack->workflow_snapshot;
         }
 
         $triggerData = $overrideTriggerData ?? $sourcePack->trigger_snapshot ?? $sourceExecution->trigger_data ?? [];
 
-        $execution = Execution::query()->create([
-            'workflow_id' => $sourceExecution->workflow_id,
-            'workspace_id' => $sourceExecution->workspace_id,
-            'status' => ExecutionStatus::Pending,
-            'mode' => ExecutionMode::Retry,
-            'triggered_by' => $user->id,
-            'trigger_data' => $triggerData,
-            'attempt' => 1,
-            'max_attempts' => $sourceExecution->max_attempts,
-            'parent_execution_id' => $sourceExecution->id,
-            'replay_of_execution_id' => $sourceExecution->id,
-            'is_deterministic_replay' => true,
-        ]);
+        [$execution, $replayPack] = DB::transaction(function () use ($sourceExecution, $user, $triggerData, $sourcePack) {
+            $execution = Execution::query()->create([
+                'workflow_id' => $sourceExecution->workflow_id,
+                'workspace_id' => $sourceExecution->workspace_id,
+                'status' => ExecutionStatus::Pending,
+                'mode' => ExecutionMode::Retry,
+                'triggered_by' => $user->id,
+                'trigger_data' => $triggerData,
+                'attempt' => 1,
+                'max_attempts' => $sourceExecution->max_attempts,
+                'parent_execution_id' => $sourceExecution->id,
+                'replay_of_execution_id' => $sourceExecution->id,
+                'is_deterministic_replay' => true,
+            ]);
 
-        $replayPack = $this->capture(
-            execution: $execution,
-            mode: 'replay',
-            sourceExecution: $sourceExecution,
-            triggerData: $triggerData,
-            fixtures: $sourcePack->fixtures ?? []
-        );
+            $replayPack = $this->capture(
+                execution: $execution,
+                mode: 'replay',
+                sourceExecution: $sourceExecution,
+                triggerData: $triggerData,
+                fixtures: $sourcePack->fixtures ?? []
+            );
+
+            return [$execution, $replayPack];
+        });
+
+        $deterministicContext = [
+            'mode' => 'replay',
+            'seed' => $replayPack->deterministic_seed,
+            'fixtures' => $replayPack->fixtures ?? [],
+            'source_execution_id' => $sourceExecution->id,
+        ];
+
+        if ($deterministicWorkflowSnapshot !== null) {
+            $deterministicContext['workflow_snapshot'] = $deterministicWorkflowSnapshot;
+        }
 
         ExecuteWorkflowJob::dispatch(
-            $sourceExecution->workflow,
+            $workflow,
             $execution,
             'default',
             $triggerData,
-            [
-                'mode' => 'replay',
-                'seed' => $replayPack->deterministic_seed,
-                'fixtures' => $replayPack->fixtures ?? [],
-                'source_execution_id' => $sourceExecution->id,
-            ]
-        );
+            $deterministicContext
+        )->afterCommit();
 
         return [
             'execution' => $execution,

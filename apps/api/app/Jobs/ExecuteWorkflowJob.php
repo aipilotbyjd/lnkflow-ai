@@ -12,6 +12,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 
@@ -111,7 +112,7 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
         $jobStatus->markProcessing();
 
         // Update execution status
-        $this->execution->update(['status' => 'running']);
+        $this->execution->update(['status' => \App\Enums\ExecutionStatus::Running]);
     }
 
     /**
@@ -173,6 +174,11 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
                 'variables' => [],
             ];
         }
+
+        Log::warning('Sensitive context (credentials & variables) is being sent to the engine. Ensure LINKFLOW_SEND_SENSITIVE_CONTEXT is disabled in production unless explicitly required.', [
+            'workflow_id' => $this->workflow->id,
+            'execution_id' => $this->execution->id,
+        ]);
 
         return [
             'credentials' => $this->getDecryptedCredentials(),
@@ -252,7 +258,7 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
     public function failed(\Throwable $exception): void
     {
         $this->execution->update([
-            'status' => 'failed',
+            'status' => \App\Enums\ExecutionStatus::Failed,
             'error' => [
                 'message' => $exception->getMessage(),
                 'code' => $exception->getCode(),

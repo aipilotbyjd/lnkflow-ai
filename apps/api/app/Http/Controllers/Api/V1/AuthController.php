@@ -17,6 +17,7 @@ use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Password;
@@ -26,32 +27,36 @@ class AuthController extends Controller
 {
     public function register(RegisterRequest $request): JsonResponse
     {
-        $user = User::query()->create([
-            'first_name' => $request->validated('first_name'),
-            'last_name' => $request->validated('last_name'),
-            'email' => $request->validated('email'),
-            'password' => Hash::make($request->validated('password')),
-        ]);
-
-        $workspace = Workspace::query()->create([
-            'name' => $user->first_name."'s Workspace",
-            'owner_id' => $user->id,
-        ]);
-
-        $workspace->members()->attach($user->id, [
-            'role' => 'owner',
-            'joined_at' => now(),
-        ]);
-
-        $freePlan = Plan::query()->where('slug', 'free')->first();
-        if ($freePlan) {
-            $workspace->subscription()->create([
-                'plan_id' => $freePlan->id,
-                'status' => SubscriptionStatus::Active,
-                'current_period_start' => now(),
-                'current_period_end' => now()->addYear(),
+        $user = DB::transaction(function () use ($request) {
+            $user = User::query()->create([
+                'first_name' => $request->validated('first_name'),
+                'last_name' => $request->validated('last_name'),
+                'email' => $request->validated('email'),
+                'password' => Hash::make($request->validated('password')),
             ]);
-        }
+
+            $workspace = Workspace::query()->create([
+                'name' => $user->first_name."'s Workspace",
+                'owner_id' => $user->id,
+            ]);
+
+            $workspace->members()->attach($user->id, [
+                'role' => 'owner',
+                'joined_at' => now(),
+            ]);
+
+            $freePlan = Plan::query()->where('slug', 'free')->first();
+            if ($freePlan) {
+                $workspace->subscription()->create([
+                    'plan_id' => $freePlan->id,
+                    'status' => SubscriptionStatus::Active,
+                    'current_period_start' => now(),
+                    'current_period_end' => now()->addYear(),
+                ]);
+            }
+
+            return $user;
+        });
 
         $user->sendEmailVerificationNotification();
 
@@ -106,7 +111,7 @@ class AuthController extends Controller
 
     public function refreshToken(RefreshTokenRequest $request): JsonResponse
     {
-        $response = Http::asForm()->post(env('APP_URL').'/oauth/token', [
+        $response = Http::asForm()->post(config('app.url').'/oauth/token', [
             'grant_type' => 'refresh_token',
             'refresh_token' => $request->validated('refresh_token'),
             'client_id' => config('passport.password_client_id'),
@@ -246,7 +251,7 @@ class AuthController extends Controller
      */
     private function issuePasswordGrantToken(string $email, string $password): ?array
     {
-        $response = Http::asForm()->post(env('APP_URL').'/oauth/token', [
+        $response = Http::asForm()->post(config('app.url').'/oauth/token', [
             'grant_type' => 'password',
             'client_id' => config('passport.password_client_id'),
             'client_secret' => config('passport.password_client_secret'),

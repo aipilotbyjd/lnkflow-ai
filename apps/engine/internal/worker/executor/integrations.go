@@ -3,11 +3,14 @@ package executor
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"time"
 )
@@ -202,7 +205,7 @@ func (e *DiscordExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Ex
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1*1024*1024))
 	if err != nil {
 		logs = append(logs, LogEntry{
 			Timestamp: time.Now(),
@@ -618,7 +621,21 @@ func (e *StorageExecutor) executeLocal(ctx context.Context, config StorageConfig
 	var response StorageResponse
 
 	// Sanitize path to prevent directory traversal
-	fullPath := e.localRoot + "/" + config.Key
+	cleanKey := filepath.Clean(config.Key)
+	fullPath := filepath.Join(e.localRoot, cleanKey)
+
+	// Verify the resolved path is still under localRoot
+	absRoot, err := filepath.Abs(e.localRoot)
+	if err != nil {
+		return response, fmt.Errorf("failed to resolve storage root: %w", err)
+	}
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return response, fmt.Errorf("failed to resolve storage path: %w", err)
+	}
+	if !strings.HasPrefix(absPath, absRoot+string(filepath.Separator)) && absPath != absRoot {
+		return response, fmt.Errorf("path traversal detected: key %q resolves outside storage root", config.Key)
+	}
 
 	*logs = append(*logs, LogEntry{
 		Timestamp: time.Now(),
@@ -797,6 +814,5 @@ func max(a, b int) int {
 }
 
 func decodeBase64(s string) ([]byte, error) {
-	// Simple base64 decode - in production use encoding/base64
-	return []byte(s), nil // Placeholder - proper implementation needed
+	return base64.StdEncoding.DecodeString(s)
 }

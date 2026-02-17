@@ -19,6 +19,7 @@ use App\Services\WorkspacePolicyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class ExecutionController extends Controller
 {
@@ -78,25 +79,29 @@ class ExecutionController extends Controller
         }
 
         // Create execution record
-        $execution = Execution::create([
-            'workflow_id' => $workflow->id,
-            'workspace_id' => $workspace->id,
-            'status' => \App\Enums\ExecutionStatus::Pending,
-            'mode' => \App\Enums\ExecutionMode::Manual,
-            'triggered_by' => $request->user()->id,
-            'trigger_data' => $request->input('input', []),
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        $execution = DB::transaction(function () use ($request, $workspace, $workflow) {
+            $execution = Execution::create([
+                'workflow_id' => $workflow->id,
+                'workspace_id' => $workspace->id,
+                'status' => \App\Enums\ExecutionStatus::Pending,
+                'mode' => \App\Enums\ExecutionMode::Manual,
+                'triggered_by' => $request->user()->id,
+                'trigger_data' => $request->input('input', []),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
-        $this->deterministicReplayService->capture(
-            execution: $execution,
-            mode: 'capture',
-            triggerData: $request->input('input', [])
-        );
+            $this->deterministicReplayService->capture(
+                execution: $execution,
+                mode: 'capture',
+                triggerData: $request->input('input', [])
+            );
+
+            return $execution;
+        });
 
         // Dispatch job to Go Engine (via Queue)
-        \App\Jobs\ExecuteWorkflowJob::dispatch($workflow, $execution, 'default', $request->input('input', []));
+        ExecuteWorkflowJob::dispatch($workflow, $execution, 'default', $request->input('input', []))->afterCommit();
 
         $execution->load(['workflow', 'triggeredBy', 'replayPack']);
 
@@ -153,7 +158,9 @@ class ExecutionController extends Controller
             $query->where('execution_node_id', $request->input('execution_node_id'));
         }
 
-        return ExecutionLogResource::collection($query->get());
+        return ExecutionLogResource::collection(
+            $query->paginate(min((int) $request->input('per_page', 50), 200))
+        );
     }
 
     public function retry(Request $request, Workspace $workspace, Execution $execution): JsonResponse
@@ -167,33 +174,37 @@ class ExecutionController extends Controller
             ], 422);
         }
 
-        $newExecution = Execution::create([
-            'workflow_id' => $execution->workflow_id,
-            'workspace_id' => $execution->workspace_id,
-            'status' => ExecutionStatus::Pending,
-            'mode' => ExecutionMode::Retry,
-            'triggered_by' => $request->user()->id,
-            'trigger_data' => $execution->trigger_data,
-            'attempt' => $execution->attempt + 1,
-            'max_attempts' => $execution->max_attempts,
-            'parent_execution_id' => $execution->id,
-            'ip_address' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        $newExecution = DB::transaction(function () use ($request, $execution) {
+            $newExecution = Execution::create([
+                'workflow_id' => $execution->workflow_id,
+                'workspace_id' => $execution->workspace_id,
+                'status' => ExecutionStatus::Pending,
+                'mode' => ExecutionMode::Retry,
+                'triggered_by' => $request->user()->id,
+                'trigger_data' => $execution->trigger_data,
+                'attempt' => $execution->attempt + 1,
+                'max_attempts' => $execution->max_attempts,
+                'parent_execution_id' => $execution->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
-        $this->deterministicReplayService->capture(
-            execution: $newExecution,
-            mode: 'capture',
-            sourceExecution: $execution,
-            triggerData: $execution->trigger_data ?? []
-        );
+            $this->deterministicReplayService->capture(
+                execution: $newExecution,
+                mode: 'capture',
+                sourceExecution: $execution,
+                triggerData: $execution->trigger_data ?? []
+            );
+
+            return $newExecution;
+        });
 
         ExecuteWorkflowJob::dispatch(
             $execution->workflow,
             $newExecution,
             'default',
             $execution->trigger_data ?? []
-        );
+        )->afterCommit();
 
         $newExecution->load(['workflow', 'triggeredBy']);
 

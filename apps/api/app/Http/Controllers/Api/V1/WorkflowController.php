@@ -120,24 +120,35 @@ class WorkflowController extends Controller
             ], 422);
         }
 
-        $contractValidation = $this->contractCompilerService->validateAndSnapshot(
-            workflow: $workflow,
-            nodes: $candidateNodes,
-            edges: $candidateEdges
-        );
+        try {
+            $workflow = DB::transaction(function () use ($workflow, $validated, $candidateNodes, $candidateEdges) {
+                $workflow = Workflow::query()->lockForUpdate()->findOrFail($workflow->id);
 
-        if ($contractValidation['status'] === 'invalid') {
+                $contractValidation = $this->contractCompilerService->validateAndSnapshot(
+                    workflow: $workflow,
+                    nodes: $candidateNodes,
+                    edges: $candidateEdges
+                );
+
+                if ($contractValidation['status'] === 'invalid') {
+                    throw new \App\Exceptions\ContractValidationException($contractValidation['issues']);
+                }
+
+                $settings = $validated['settings'] ?? $workflow->settings ?? [];
+                $settings['contract_snapshot_id'] = $contractValidation['snapshot']->id;
+                $validated['settings'] = $settings;
+
+                $workflow->update($validated);
+
+                return $workflow;
+            });
+        } catch (\App\Exceptions\ContractValidationException $e) {
             return response()->json([
                 'message' => 'Workflow has invalid data contracts.',
-                'issues' => $contractValidation['issues'],
+                'issues' => $e->getIssues(),
             ], 422);
         }
 
-        $settings = $validated['settings'] ?? $workflow->settings ?? [];
-        $settings['contract_snapshot_id'] = $contractValidation['snapshot']->id;
-        $validated['settings'] = $settings;
-
-        $workflow->update($validated);
         $workflow->load('creator');
 
         return response()->json([
@@ -200,6 +211,9 @@ class WorkflowController extends Controller
         $newWorkflow = $workflow->replicate(['execution_count', 'last_executed_at', 'success_rate']);
         $newWorkflow->name = $workflow->name.' (Copy)';
         $newWorkflow->is_active = false;
+        $settings = $newWorkflow->settings ?? [];
+        unset($settings['contract_snapshot_id']);
+        $newWorkflow->settings = $settings;
         $newWorkflow->created_by = $request->user()->id;
         $newWorkflow->save();
 

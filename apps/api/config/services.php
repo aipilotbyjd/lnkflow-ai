@@ -38,6 +38,7 @@ return [
     'engine' => [
         'secret' => env('LINKFLOW_ENGINE_SECRET'),
         'callback_ttl' => env('LINKFLOW_ENGINE_CALLBACK_TTL', 300),
+        'send_sensitive_context' => env('LINKFLOW_SEND_SENSITIVE_CONTEXT', false),
     ],
 
 ];

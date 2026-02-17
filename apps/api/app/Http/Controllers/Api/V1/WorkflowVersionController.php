@@ -12,6 +12,7 @@ use App\Services\ActivityLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class WorkflowVersionController extends Controller
 {
@@ -107,14 +108,18 @@ class WorkflowVersionController extends Controller
     {
         $this->authorize('workflow.update');
 
-        // Create a new version to preserve current state before restoring
-        $backupVersion = WorkflowVersion::createFromWorkflow(
-            $workflow,
-            $request->user()->id,
-            "Backup before restoring to version {$version->version_number}"
-        );
+        $backupVersion = DB::transaction(function () use ($request, $workflow, $version) {
+            // Create a new version to preserve current state before restoring
+            $backupVersion = WorkflowVersion::createFromWorkflow(
+                $workflow,
+                $request->user()->id,
+                "Backup before restoring to version {$version->version_number}"
+            );
 
-        $version->restoreToWorkflow();
+            $version->restoreToWorkflow();
+
+            return $backupVersion;
+        });
 
         $this->activityLogService->log(
             $workspace,

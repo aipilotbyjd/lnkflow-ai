@@ -51,14 +51,11 @@ class WorkspaceEnvironmentController extends Controller
         $this->authorize('environment.deploy');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
-        $from = WorkspaceEnvironment::query()->findOrFail($request->integer('from_environment_id'));
-        $to = WorkspaceEnvironment::query()->findOrFail($request->integer('to_environment_id'));
+        $from = $workspace->environments()->findOrFail($request->integer('from_environment_id'));
+        $to = $workspace->environments()->findOrFail($request->integer('to_environment_id'));
         $version = $request->filled('workflow_version_id')
-            ? WorkflowVersion::query()->findOrFail($request->integer('workflow_version_id'))
+            ? $workflow->versions()->findOrFail($request->integer('workflow_version_id'))
             : null;
-
-        $this->ensureEnvironmentBelongsToWorkspace($workspace, $from);
-        $this->ensureEnvironmentBelongsToWorkspace($workspace, $to);
 
         $release = $this->gitEnvironmentService->promote(
             workflow: $workflow,
@@ -82,10 +79,8 @@ class WorkspaceEnvironmentController extends Controller
         $this->authorize('environment.deploy');
         $this->ensureWorkflowBelongsToWorkspace($workflow, $workspace);
 
-        $to = WorkspaceEnvironment::query()->findOrFail($request->integer('to_environment_id'));
-        $version = WorkflowVersion::query()->findOrFail($request->integer('workflow_version_id'));
-
-        $this->ensureEnvironmentBelongsToWorkspace($workspace, $to);
+        $to = $workspace->environments()->findOrFail($request->integer('to_environment_id'));
+        $version = $workflow->versions()->findOrFail($request->integer('workflow_version_id'));
 
         $release = $this->gitEnvironmentService->rollback(
             workflow: $workflow,

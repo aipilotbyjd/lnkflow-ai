@@ -217,6 +217,9 @@ class WorkflowImportExportController extends Controller
             $name = $workflowData['name'].' ('.$counter++.')';
         }
 
+        // Process nodes and build ID mapping for edge remapping
+        $processedNodes = $this->processImportedNodes($workflowData['nodes'] ?? []);
+
         // Create the workflow
         $workflow = Workflow::create([
             'workspace_id' => $workspace->id,
@@ -227,8 +230,8 @@ class WorkflowImportExportController extends Controller
             'color' => $workflowData['color'] ?? null,
             'trigger_type' => $workflowData['trigger_type'] ?? 'manual',
             'trigger_config' => $workflowData['trigger_config'] ?? null,
-            'nodes' => $this->processImportedNodes($workflowData['nodes'] ?? []),
-            'edges' => $workflowData['edges'] ?? [],
+            'nodes' => $processedNodes['nodes'],
+            'edges' => $this->processImportedEdges($workflowData['edges'] ?? [], $processedNodes['id_mapping']),
             'viewport' => $workflowData['viewport'] ?? null,
             'settings' => $workflowData['settings'] ?? null,
             'is_active' => false, // Start inactive
@@ -275,6 +278,8 @@ class WorkflowImportExportController extends Controller
 
     /**
      * Process imported nodes (regenerate IDs, handle placeholders).
+     *
+     * @return array{nodes: array, id_mapping: array}
      */
     private function processImportedNodes(array $nodes): array
     {
@@ -296,7 +301,27 @@ class WorkflowImportExportController extends Controller
             }
         }
 
-        return $nodes;
+        return ['nodes' => $nodes, 'id_mapping' => $idMapping];
+    }
+
+    /**
+     * Process imported edges (remap source/target to new node IDs).
+     */
+    private function processImportedEdges(array $edges, array $idMapping): array
+    {
+        return collect($edges)->map(function ($edge) use ($idMapping) {
+            if (isset($edge['source']) && isset($idMapping[$edge['source']])) {
+                $edge['source'] = $idMapping[$edge['source']];
+            }
+            if (isset($edge['target']) && isset($idMapping[$edge['target']])) {
+                $edge['target'] = $idMapping[$edge['target']];
+            }
+            // Also remap sourceHandle/targetHandle if they contain node IDs
+            if (isset($edge['id'])) {
+                $edge['id'] = Str::uuid()->toString();
+            }
+            return $edge;
+        })->toArray();
     }
 
     /**

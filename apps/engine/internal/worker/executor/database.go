@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -12,6 +13,7 @@ import (
 // DatabaseExecutor handles database operations.
 type DatabaseExecutor struct {
 	pools map[string]*pgxpool.Pool
+	mu    sync.Mutex
 }
 
 // DatabaseConfig represents the configuration for a database node.
@@ -56,7 +58,19 @@ func NewDatabaseExecutor() *DatabaseExecutor {
 
 // RegisterConnection registers a named connection pool.
 func (e *DatabaseExecutor) RegisterConnection(name string, pool *pgxpool.Pool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.pools[name] = pool
+}
+
+// Close closes all cached connection pools.
+func (e *DatabaseExecutor) Close() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for key, pool := range e.pools {
+		pool.Close()
+		delete(e.pools, key)
+	}
 }
 
 func (e *DatabaseExecutor) NodeType() string {
@@ -178,23 +192,37 @@ func (e *DatabaseExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 func (e *DatabaseExecutor) getPool(ctx context.Context, config DatabaseConfig) (*pgxpool.Pool, error) {
 	// Try named connection first
 	if config.ConnectionName != "" {
-		if pool, ok := e.pools[config.ConnectionName]; ok {
+		e.mu.Lock()
+		pool, ok := e.pools[config.ConnectionName]
+		e.mu.Unlock()
+		if ok {
 			return pool, nil
 		}
 		return nil, fmt.Errorf("connection '%s' not found", config.ConnectionName)
 	}
 
-	// Create a new pool from connection string
+	// Create or reuse a cached pool from connection string
 	if config.ConnectionString != "" {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+
+		if pool, ok := e.pools[config.ConnectionString]; ok {
+			return pool, nil
+		}
+
 		pool, err := pgxpool.New(ctx, config.ConnectionString)
 		if err != nil {
 			return nil, err
 		}
+		e.pools[config.ConnectionString] = pool
 		return pool, nil
 	}
 
 	// Check for default pool
-	if pool, ok := e.pools["default"]; ok {
+	e.mu.Lock()
+	pool, ok := e.pools["default"]
+	e.mu.Unlock()
+	if ok {
 		return pool, nil
 	}
 

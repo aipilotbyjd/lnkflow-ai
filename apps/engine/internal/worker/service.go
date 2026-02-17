@@ -628,8 +628,12 @@ func deterministicFromTask(raw map[string]interface{}) *executor.DeterministicCo
 		ctx.SourceExecutionID = int(source)
 	}
 
-	if fixturesRaw, ok := raw["fixtures"].([]map[string]interface{}); ok {
-		for _, fixtureRaw := range fixturesRaw {
+	if fixturesRaw, ok := raw["fixtures"].([]interface{}); ok {
+		for _, item := range fixturesRaw {
+			fixtureRaw, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
 			fixture := executor.DeterministicFixture{}
 			if fp, ok := fixtureRaw["request_fingerprint"].(string); ok {
 				fixture.RequestFingerprint = fp

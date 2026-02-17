@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 
 class Workflow extends Model
 {
@@ -198,19 +199,24 @@ class Workflow extends Model
 
     public function incrementExecutionCount(bool $success): void
     {
-        $this->increment('execution_count');
+        DB::transaction(function () use ($success) {
+            $workflow = Workflow::query()->lockForUpdate()->find($this->id);
+            if (! $workflow) {
+                return;
+            }
 
-        $totalExecutions = $this->execution_count;
-        $currentSuccessRate = (float) $this->success_rate;
+            $newCount = $workflow->execution_count + 1;
+            $currentSuccessRate = (float) $workflow->success_rate;
+            $successCount = (int) round(($currentSuccessRate / 100) * $workflow->execution_count);
+            if ($success) {
+                $successCount++;
+            }
 
-        $successCount = (int) round(($currentSuccessRate / 100) * ($totalExecutions - 1));
-        if ($success) {
-            $successCount++;
-        }
-
-        $this->update([
-            'last_executed_at' => now(),
-            'success_rate' => $totalExecutions > 0 ? ($successCount / $totalExecutions) * 100 : 0,
-        ]);
+            $workflow->update([
+                'execution_count' => $newCount,
+                'last_executed_at' => now(),
+                'success_rate' => $newCount > 0 ? ($successCount / $newCount) * 100 : 0,
+            ]);
+        });
     }
 }

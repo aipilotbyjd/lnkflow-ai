@@ -106,59 +106,94 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 	commands := []*historyv1.Command{}
 	graph := payload.Workflow
 
-	// Check if all nodes are done or if we need to schedule new ones
-	allNodesCompleted := true
-	nodesToSchedule := []Node{}
-	inputs := make(map[string][]byte)
-
-	// Check for Start Node
-	var startNode *Node
-	for _, node := range graph.Nodes {
-		if nodeStates[node.ID] == "" && (node.Type == "trigger_manual" || node.Type == "trigger_webhook" || node.Type == "trigger_schedule") {
-			startNode = &node
+	// Check for failed nodes first — fail the workflow immediately
+	hasFailedNode := false
+	var failureMessage string
+	for nodeID, status := range nodeStates {
+		if status == "Failed" {
+			hasFailedNode = true
+			failureMessage = fmt.Sprintf("node '%s' failed", nodeID)
 			break
 		}
 	}
 
-	if startNode != nil {
-		allNodesCompleted = false
-		nodesToSchedule = append(nodesToSchedule, *startNode)
-		triggerDataBytes, _ := json.Marshal(payload.TriggerData)
-		inputs[startNode.ID] = triggerDataBytes
-	} else {
-		// Check dependencies
-		for _, node := range graph.Nodes {
-			if nodeStates[node.ID] != "Completed" {
-				allNodesCompleted = false
+	if hasFailedNode {
+		cmd := &historyv1.Command{
+			CommandType: historyv1.CommandType_COMMAND_TYPE_FAIL_WORKFLOW_EXECUTION,
+			Attributes: &historyv1.Command_FailWorkflowExecutionAttributes{
+				FailWorkflowExecutionAttributes: &historyv1.FailWorkflowExecutionCommandAttributes{
+					Failure: &commonv1.Failure{
+						Message: failureMessage,
+					},
+				},
+			},
+		}
+		commands = append(commands, cmd)
+
+		outputBytes, err := json.Marshal(commands)
+		if err != nil {
+			return nil, err
+		}
+		return &ExecuteResponse{Output: outputBytes}, nil
+	}
+
+	allNodesCompleted := true
+	nodesToSchedule := []Node{}
+	inputs := make(map[string]json.RawMessage)
+
+	for _, node := range graph.Nodes {
+		if nodeStates[node.ID] != "Completed" {
+			allNodesCompleted = false
+		}
+
+		// Skip already scheduled/completed/failed nodes
+		if nodeStates[node.ID] != "" {
+			continue
+		}
+
+		// Determine if this is a trigger node
+		isTrigger := node.Type == "trigger_manual" || node.Type == "trigger_webhook" || node.Type == "trigger_schedule"
+
+		// Find incoming edges
+		var incomingEdges []Edge
+		for _, edge := range graph.Edges {
+			if edge.Target == node.ID {
+				incomingEdges = append(incomingEdges, edge)
 			}
+		}
 
-			// If already scheduled/completed, skip
-			if nodeStates[node.ID] != "" {
-				continue
+		if isTrigger || len(incomingEdges) == 0 {
+			// Root node (trigger or no incoming edges) — schedule with trigger data
+			nodesToSchedule = append(nodesToSchedule, node)
+			triggerDataBytes, _ := json.Marshal(payload.TriggerData)
+			inputs[node.ID] = triggerDataBytes
+			continue
+		}
+
+		// Check if all dependencies are completed
+		canRun := true
+		mergedInput := make(map[string]json.RawMessage)
+		for _, edge := range incomingEdges {
+			if nodeStates[edge.Source] != "Completed" {
+				canRun = false
+				break
 			}
+			if output, ok := nodeOutputs[edge.Source]; ok {
+				mergedInput[edge.Source] = output
+			}
+		}
 
-			// Check incoming edges
-			canRun := true
-			var input []byte
-
-			incomingEdges := 0
-			for _, edge := range graph.Edges {
-				if edge.Target == node.ID {
-					incomingEdges++
-					if nodeStates[edge.Source] != "Completed" {
-						canRun = false
-						break
-					}
-					input = nodeOutputs[edge.Source] // Simple single input
+		if canRun {
+			nodesToSchedule = append(nodesToSchedule, node)
+			if len(mergedInput) == 1 {
+				// Single input — pass directly for backward compatibility
+				for _, v := range mergedInput {
+					inputs[node.ID] = v
 				}
-			}
-
-			// If it's a root node (no incoming edges) but not a trigger?
-			// In this graph model, usually triggers are roots.
-			// If canRun is true, schedule it.
-			if canRun && incomingEdges > 0 {
-				nodesToSchedule = append(nodesToSchedule, node)
-				inputs[node.ID] = input
+			} else {
+				// Multiple inputs — merge into a keyed map
+				mergedBytes, _ := json.Marshal(mergedInput)
+				inputs[node.ID] = mergedBytes
 			}
 		}
 	}
@@ -210,7 +245,7 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 						Payloads: []*commonv1.Payload{{Data: envelopeBytes}},
 					},
 					TaskQueue: "default",
-					Config:    configBytes, // We added this field to Command
+					Config:    configBytes,
 				},
 			},
 		}
@@ -219,7 +254,6 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 
 	// 5. Check for Workflow Completion
 	if allNodesCompleted {
-		// Find leaf nodes results? Or just complete.
 		cmd := &historyv1.Command{
 			CommandType: historyv1.CommandType_COMMAND_TYPE_COMPLETE_WORKFLOW_EXECUTION,
 			Attributes: &historyv1.Command_CompleteWorkflowExecutionAttributes{
