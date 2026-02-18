@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -121,8 +122,6 @@ func (e *DelayExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 		}, nil
 	}
 
-	// TODO(perf): Long delays block a worker goroutine. At scale, delays should be
-	// handled by the Timer service (schedule a wake-up event) instead of blocking here.
 	// Cap maximum delay for safety (72 hours)
 	maxDelay := 72 * time.Hour
 	if delayDuration > maxDelay {
@@ -134,27 +133,76 @@ func (e *DelayExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*Exec
 		delayDuration = maxDelay
 	}
 
+	// For short delays (≤30s), block in-process to avoid timer overhead
+	const shortDelayThreshold = 30 * time.Second
+
+	if delayDuration <= shortDelayThreshold {
+		logs = append(logs, LogEntry{
+			Timestamp: time.Now(),
+			Level:     "INFO",
+			Message:   fmt.Sprintf("Short delay: waiting %v in-process", delayDuration),
+		})
+
+		select {
+		case <-ctx.Done():
+			return &ExecuteResponse{
+				Error: &ExecutionError{
+					Message: "delay was canceled",
+					Type:    ErrorTypeNonRetryable,
+				},
+				Logs:     logs,
+				Duration: time.Since(start),
+			}, nil
+		case <-time.After(delayDuration):
+			// Delay completed
+		}
+
+		return e.buildCompletedResponse(start, logs)
+	}
+
+	// For long delays (>30s), return immediately with timer metadata.
+	// This avoids blocking a worker goroutine for extended periods.
+	// The workflow executor should use the Timer service to schedule a wake-up.
 	logs = append(logs, LogEntry{
 		Timestamp: time.Now(),
 		Level:     "INFO",
-		Message:   fmt.Sprintf("Waiting for %v", delayDuration),
+		Message:   fmt.Sprintf("Long delay requested (%v): returning timer request instead of blocking", delayDuration),
 	})
 
-	// Perform the delay
-	select {
-	case <-ctx.Done():
+	resumeAt := time.Now().Add(delayDuration)
+	timerResponse := map[string]interface{}{
+		"timer_requested": true,
+		"delay_duration":  delayDuration.String(),
+		"delay_seconds":   int64(delayDuration.Seconds()),
+		"resume_at":       resumeAt.Format(time.RFC3339),
+		"started_at":      start.Format(time.RFC3339),
+	}
+
+	output, err := json.Marshal(timerResponse)
+	if err != nil {
 		return &ExecuteResponse{
 			Error: &ExecutionError{
-				Message: "delay was canceled",
+				Message: fmt.Sprintf("failed to marshal timer response: %v", err),
 				Type:    ErrorTypeNonRetryable,
 			},
 			Logs:     logs,
 			Duration: time.Since(start),
 		}, nil
-	case <-time.After(delayDuration):
-		// Delay completed
 	}
 
+	return &ExecuteResponse{
+		Output: output,
+		Logs:   logs,
+		Metadata: map[string]string{
+			"timer_requested":  "true",
+			"timer_duration_s": strconv.FormatInt(int64(delayDuration.Seconds()), 10),
+			"resume_at":        resumeAt.Format(time.RFC3339),
+		},
+		Duration: time.Since(start),
+	}, nil
+}
+
+func (e *DelayExecutor) buildCompletedResponse(start time.Time, logs []LogEntry) (*ExecuteResponse, error) {
 	endTime := time.Now()
 
 	logs = append(logs, LogEntry{

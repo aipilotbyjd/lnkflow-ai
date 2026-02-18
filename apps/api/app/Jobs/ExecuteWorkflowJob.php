@@ -7,7 +7,6 @@ use App\Models\JobStatus;
 use App\Models\Workflow;
 use App\Services\DeterministicReplayService;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -16,7 +15,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 
-class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
+class ExecuteWorkflowJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -26,15 +25,11 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
 
     /**
      * Number of times the job may be attempted.
-     */
-    public int $tries = 3;
-
-    /**
-     * Backoff between retries (seconds).
      *
-     * @var array<int>
+     * Set to 1 because the Go engine handles all node-level retries internally.
+     * The Laravel job only publishes to Redis Stream — retry logic lives in the engine.
      */
-    public array $backoff = [10, 60, 300];
+    public int $tries = 1;
 
     /**
      * Time (seconds) before job should timeout.
@@ -51,14 +46,6 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
         $this->jobId = (string) Str::uuid();
         $this->partition = $workflow->workspace_id % $this->getPartitionCount();
         $this->onQueue("workflows-{$priority}");
-    }
-
-    /**
-     * Unique ID for preventing duplicate jobs.
-     */
-    public function uniqueId(): string
-    {
-        return "workflow:{$this->workflow->id}:execution:{$this->execution->id}";
     }
 
     public function handle(): void
@@ -162,26 +149,18 @@ class ExecuteWorkflowJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Build optional sensitive context sent to the engine.
+     * Build context sent to the engine.
+     *
+     * Credentials are NEVER sent via Redis Streams. The Go engine resolves
+     * credentials directly from the database using the credential resolver.
+     * Only non-sensitive variables are included.
      *
      * @return array{credentials: array<string, mixed>, variables: array<string, mixed>}
      */
     protected function buildSensitiveContext(): array
     {
-        if (! config('services.engine.send_sensitive_context', false)) {
-            return [
-                'credentials' => [],
-                'variables' => [],
-            ];
-        }
-
-        Log::warning('Sensitive context (credentials & variables) is being sent to the engine. Ensure LINKFLOW_SEND_SENSITIVE_CONTEXT is disabled in production unless explicitly required.', [
-            'workflow_id' => $this->workflow->id,
-            'execution_id' => $this->execution->id,
-        ]);
-
         return [
-            'credentials' => $this->getDecryptedCredentials(),
+            'credentials' => [],
             'variables' => $this->getVariables(),
         ];
     }

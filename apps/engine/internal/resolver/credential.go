@@ -29,17 +29,19 @@ type Credential struct {
 
 // CredentialResolver resolves and decrypts credentials.
 type CredentialResolver struct {
-	pool      *pgxpool.Pool
-	encryptor *crypto.Encryptor
-	cache     *credentialCache
+	pool             *pgxpool.Pool
+	encryptor        *crypto.Encryptor
+	laravelEncryptor *crypto.LaravelEncryptor
+	cache            *credentialCache
 
 	cacheTTL time.Duration
 }
 
 // CredentialConfig holds resolver configuration.
 type CredentialConfig struct {
-	MasterKey string
-	CacheTTL  time.Duration
+	MasterKey    string
+	LaravelAppKey string // Laravel APP_KEY for decrypting Laravel-encrypted credentials
+	CacheTTL     time.Duration
 }
 
 // NewCredentialResolver creates a new credential resolver.
@@ -49,16 +51,25 @@ func NewCredentialResolver(pool *pgxpool.Pool, config CredentialConfig) (*Creden
 		return nil, fmt.Errorf("failed to create encryptor: %w", err)
 	}
 
+	var laravelEnc *crypto.LaravelEncryptor
+	if config.LaravelAppKey != "" {
+		laravelEnc, err = crypto.NewLaravelEncryptor(config.LaravelAppKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Laravel encryptor: %w", err)
+		}
+	}
+
 	cacheTTL := config.CacheTTL
 	if cacheTTL == 0 {
 		cacheTTL = 5 * time.Minute
 	}
 
 	return &CredentialResolver{
-		pool:      pool,
-		encryptor: encryptor,
-		cache:     newCredentialCache(cacheTTL),
-		cacheTTL:  cacheTTL,
+		pool:             pool,
+		encryptor:        encryptor,
+		laravelEncryptor: laravelEnc,
+		cache:            newCredentialCache(cacheTTL),
+		cacheTTL:         cacheTTL,
 	}, nil
 }
 
@@ -85,10 +96,12 @@ func (r *CredentialResolver) Resolve(
 	}
 
 	// Fetch missing from database
+	// Use Laravel's column names: 'data' for encrypted credential data,
+	// 'workspace_id' for tenant scoping (not namespace_id)
 	query := `
-		SELECT id, name, credential_type, encrypted_value
+		SELECT id, name, credential_type, data
 		FROM credentials
-		WHERE namespace_id = $1 AND id = ANY($2)
+		WHERE workspace_id = $1 AND id = ANY($2) AND deleted_at IS NULL
 	`
 
 	rows, err := r.pool.Query(ctx, query, namespaceID, missing)
@@ -104,8 +117,8 @@ func (r *CredentialResolver) Resolve(
 			return nil, fmt.Errorf("failed to scan credential: %w", err)
 		}
 
-		// Decrypt
-		decrypted, err := r.encryptor.DecryptString(encryptedValue)
+		// Decrypt — try Laravel format first, fall back to native GCM
+		decrypted, err := r.decryptCredential(encryptedValue)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt credential %s: %w", id, err)
 		}
@@ -140,9 +153,9 @@ func (r *CredentialResolver) ResolveByName(
 	}
 
 	query := `
-		SELECT id, name, credential_type, encrypted_value
+		SELECT id, name, credential_type, data
 		FROM credentials
-		WHERE namespace_id = $1 AND name = $2
+		WHERE workspace_id = $1 AND name = $2 AND deleted_at IS NULL
 	`
 
 	var id, credName, credType, encryptedValue string
@@ -151,7 +164,7 @@ func (r *CredentialResolver) ResolveByName(
 		return nil, ErrCredentialNotFound
 	}
 
-	decrypted, err := r.encryptor.DecryptString(encryptedValue)
+	decrypted, err := r.decryptCredential(encryptedValue)
 	if err != nil {
 		return nil, ErrDecryptionFailed
 	}
@@ -169,6 +182,20 @@ func (r *CredentialResolver) ResolveByName(
 
 	r.cache.setByName(namespaceID, name, cred)
 	return cred, nil
+}
+
+// decryptCredential attempts to decrypt a credential value.
+// It tries Laravel's AES-256-CBC format first, then falls back to native AES-256-GCM.
+func (r *CredentialResolver) decryptCredential(encryptedValue string) (string, error) {
+	// Try Laravel format first (base64-encoded JSON envelope)
+	if r.laravelEncryptor != nil {
+		if decrypted, err := r.laravelEncryptor.Decrypt(encryptedValue); err == nil {
+			return decrypted, nil
+		}
+	}
+
+	// Fall back to native GCM encryption
+	return r.encryptor.DecryptString(encryptedValue)
 }
 
 // InvalidateCache invalidates cached credentials.

@@ -3,12 +3,16 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -236,4 +240,123 @@ func deriveKey(masterKey, salt []byte) []byte {
 		salt = []byte("linkflow-engine-v1")
 	}
 	return pbkdf2.Key(masterKey, salt, 10000, 32, sha256.New)
+}
+
+// --- Laravel-compatible decryption ---
+// Laravel's Crypt facade uses AES-256-CBC with the following format:
+// base64(json({"iv": base64(iv), "value": base64(ciphertext), "mac": hmac-sha256(iv+value), "tag": ""}))
+
+// LaravelEncryptor decrypts values encrypted by Laravel's Crypt facade.
+type LaravelEncryptor struct {
+	key []byte // Raw APP_KEY bytes (32 bytes for AES-256-CBC)
+}
+
+// laravelPayload represents Laravel's encrypted payload JSON structure.
+type laravelPayload struct {
+	IV    string `json:"iv"`
+	Value string `json:"value"`
+	MAC   string `json:"mac"`
+	Tag   string `json:"tag"`
+}
+
+// NewLaravelEncryptor creates a new Laravel-compatible encryptor.
+// keyStr should be the Laravel APP_KEY value. If it starts with "base64:", the
+// prefix is stripped and the remainder is base64-decoded.
+func NewLaravelEncryptor(keyStr string) (*LaravelEncryptor, error) {
+	keyStr = strings.TrimPrefix(keyStr, "base64:")
+
+	key, err := base64.StdEncoding.DecodeString(keyStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode Laravel APP_KEY: %w", err)
+	}
+
+	if len(key) != 32 {
+		return nil, fmt.Errorf("Laravel APP_KEY must be 32 bytes for AES-256-CBC, got %d", len(key))
+	}
+
+	return &LaravelEncryptor{key: key}, nil
+}
+
+// Decrypt decrypts a value encrypted by Laravel's Crypt::encryptString().
+func (le *LaravelEncryptor) Decrypt(encrypted string) (string, error) {
+	// 1. Base64-decode the outer envelope
+	jsonBytes, err := base64.StdEncoding.DecodeString(encrypted)
+	if err != nil {
+		return "", fmt.Errorf("failed to base64-decode Laravel payload: %w", err)
+	}
+
+	// 2. Parse the JSON payload
+	var payload laravelPayload
+	if err := json.Unmarshal(jsonBytes, &payload); err != nil {
+		return "", fmt.Errorf("failed to parse Laravel payload JSON: %w", err)
+	}
+
+	// 3. Verify the MAC: HMAC-SHA256(key, iv + value)
+	mac := hmac.New(sha256.New, le.key)
+	mac.Write([]byte(payload.IV))
+	mac.Write([]byte(payload.Value))
+	expectedMAC := mac.Sum(nil)
+
+	actualMAC, err := hex.DecodeString(payload.MAC)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode MAC: %w", err)
+	}
+
+	if !hmac.Equal(expectedMAC, actualMAC) {
+		return "", errors.New("Laravel payload MAC verification failed")
+	}
+
+	// 4. Base64-decode IV and ciphertext
+	iv, err := base64.StdEncoding.DecodeString(payload.IV)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode IV: %w", err)
+	}
+
+	ciphertext, err := base64.StdEncoding.DecodeString(payload.Value)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
+	}
+
+	// 5. AES-256-CBC decrypt
+	block, err := aes.NewCipher(le.key)
+	if err != nil {
+		return "", fmt.Errorf("failed to create AES cipher: %w", err)
+	}
+
+	if len(ciphertext)%aes.BlockSize != 0 {
+		return "", errors.New("ciphertext is not a multiple of the block size")
+	}
+
+	mode := cipher.NewCBCDecrypter(block, iv)
+	plaintext := make([]byte, len(ciphertext))
+	mode.CryptBlocks(plaintext, ciphertext)
+
+	// 6. Remove PKCS7 padding
+	plaintext, err = pkcs7Unpad(plaintext)
+	if err != nil {
+		return "", fmt.Errorf("failed to remove PKCS7 padding: %w", err)
+	}
+
+	return string(plaintext), nil
+}
+
+// pkcs7Unpad removes PKCS7 padding from decrypted data.
+func pkcs7Unpad(data []byte) ([]byte, error) {
+	length := len(data)
+	if length == 0 {
+		return nil, errors.New("empty data")
+	}
+
+	padding := int(data[length-1])
+	if padding < 1 || padding > aes.BlockSize || padding > length {
+		return nil, errors.New("invalid PKCS7 padding")
+	}
+
+	for i := length - padding; i < length; i++ {
+		if data[i] != byte(padding) {
+			return nil, errors.New("invalid PKCS7 padding")
+		}
+	}
+
+	return data[:length-padding], nil
 }

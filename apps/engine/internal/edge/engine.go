@@ -2,8 +2,10 @@ package edge
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -478,8 +480,12 @@ func (e *Engine) checkCentralConnection(ctx context.Context) {
 }
 
 func generateEdgeExecutionID() string {
-	// Simple timestamp-based ID for edge executions
-	return time.Now().Format("20060102150405.000000")
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40 // UUID version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // UUID variant
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
 func (m ExecutionMode) String() string {

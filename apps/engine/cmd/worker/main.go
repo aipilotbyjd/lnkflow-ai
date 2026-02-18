@@ -142,6 +142,26 @@ func run() error {
 	svc.RegisterExecutor(logicConditionExecutor)
 	nodeRegistry.MustRegister(logicConditionExecutor)
 
+	// Database executor for action_database nodes
+	databaseExecutor := executor.NewDatabaseExecutor()
+	svc.RegisterExecutor(databaseExecutor)
+	nodeRegistry.MustRegister(databaseExecutor)
+
+	// Storage executor for action_storage nodes
+	storageExecutor := executor.NewStorageExecutor()
+	svc.RegisterExecutor(storageExecutor)
+	nodeRegistry.MustRegister(storageExecutor)
+
+	// Code executor for action_code nodes
+	codeExecutor := executor.NewCodeExecutor()
+	svc.RegisterExecutor(codeExecutor)
+	nodeRegistry.MustRegister(codeExecutor)
+
+	// Approval executor for action_approval nodes
+	approvalExecutor := executor.NewApprovalExecutor()
+	svc.RegisterExecutor(approvalExecutor)
+	nodeRegistry.MustRegister(approvalExecutor)
+
 	// Set the registry on workflow executor so it can execute individual nodes
 	workflowExecutor.SetRegistry(nodeRegistry)
 

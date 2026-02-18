@@ -3,11 +3,12 @@
 namespace App\Console\Commands;
 
 use App\Enums\TriggerType;
-use App\Jobs\ExecuteWorkflowJob;
 use App\Models\Workflow;
+use App\Services\WorkflowDispatchService;
 use Cron\CronExpression;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class DispatchScheduledWorkflows extends Command
 {
@@ -61,7 +62,19 @@ class DispatchScheduledWorkflows extends Command
 
                 // Check if the workflow should run now (within the last minute)
                 if ($this->shouldRunNow($cron, $now, $config)) {
+                    // Prevent duplicate dispatches if scheduler runs twice in same minute
+                    $lockKey = "schedule-lock:{$workflow->id}:".$now->format('YmdHi');
+                    $lock = Cache::lock($lockKey, 120);
+
+                    if (! $lock->get()) {
+                        $this->line("  Skipped (already dispatched): {$workflow->name} (ID: {$workflow->id})");
+                        $skipped++;
+
+                        continue;
+                    }
+
                     if ($dryRun) {
+                        $lock->release();
                         $this->line("  [DRY-RUN] Would dispatch: {$workflow->name} (ID: {$workflow->id})");
                     } else {
                         $this->dispatchWorkflow($workflow, $config);
@@ -118,7 +131,8 @@ class DispatchScheduledWorkflows extends Command
     }
 
     /**
-     * Dispatch the workflow for execution.
+     * Dispatch the workflow for execution via WorkflowDispatchService.
+     * This ensures contract validation, policy validation, and rate limiting are applied.
      */
     private function dispatchWorkflow(Workflow $workflow, array $config): void
     {
@@ -129,16 +143,10 @@ class DispatchScheduledWorkflows extends Command
             'timezone' => $config['timezone'] ?? config('app.timezone'),
         ];
 
-        // Create execution record and dispatch job
-        $execution = $workflow->executions()->create([
-            'workspace_id' => $workflow->workspace_id,
-            'status' => 'pending',
-            'mode' => 'schedule',
-            'trigger_data' => $triggerData,
-            'attempt' => 1,
-            'max_attempts' => $config['max_retries'] ?? 3,
-        ]);
-
-        ExecuteWorkflowJob::dispatch($workflow, $execution, 'default', $triggerData);
+        app(WorkflowDispatchService::class)->dispatchLowPriority(
+            workflow: $workflow,
+            mode: 'schedule',
+            triggerData: $triggerData,
+        );
     }
 }

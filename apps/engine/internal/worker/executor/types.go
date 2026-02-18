@@ -53,7 +53,28 @@ type Position struct {
 }
 
 type Edge struct {
-	ID     string `json:"id"`
-	Source string `json:"source"`
-	Target string `json:"target"`
+	ID           string `json:"id"`
+	Source       string `json:"source"`
+	Target       string `json:"target"`
+	SourceHandle string `json:"sourceHandle,omitempty"`
+	TargetHandle string `json:"targetHandle,omitempty"`
+	Label        string `json:"label,omitempty"`
+	Condition    string `json:"condition,omitempty"`
+}
+
+// GetOnError extracts the onError policy from a node's Data field.
+// Returns "stop" (default), "continue".
+func (n *Node) GetOnError() string {
+	var data struct {
+		OnError string `json:"onError"`
+	}
+	if err := json.Unmarshal(n.Data, &data); err == nil && data.OnError != "" {
+		return data.OnError
+	}
+	return "stop"
+}
+
+// IsConditionType returns true if the node is a condition or logic_condition type.
+func (n *Node) IsConditionType() bool {
+	return n.Type == "condition" || n.Type == "logic_condition"
 }

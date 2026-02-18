@@ -30,6 +30,7 @@ type ExecuteResponse struct {
 	ConnectorAttempts     []ConnectorAttempt
 	DeterministicFixtures []DeterministicFixture
 	Logs                  []LogEntry
+	Metadata              map[string]string // Optional executor metadata (e.g., timer_requested)
 	Duration              time.Duration
 }
 

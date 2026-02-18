@@ -1,3 +1,12 @@
+// Package queue provides an in-memory priority queue used by the standalone
+// DAG scheduler for direct execution mode.
+//
+// The primary Temporal-style execution path does NOT use this queue — it uses
+// the Matching service (gRPC) for durable, persistent task queuing.
+//
+// WARNING: Tasks in this queue are NOT persisted to disk or database.
+// If the engine process crashes, all queued tasks are lost. For production
+// workloads requiring durability, use the Matching service path instead.
 package queue
 
 import (
