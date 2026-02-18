@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Workspace\StoreWorkspaceRequest;
 use App\Http\Requests\Api\V1\Workspace\UpdateWorkspaceRequest;
 use App\Http\Resources\Api\V1\WorkspaceResource;
+use App\Models\Plan;
 use App\Models\Workspace;
-
+use App\Services\CreditMeterService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class WorkspaceController extends Controller
 {
-
-
     public function index(Request $request): AnonymousResourceCollection
     {
         $workspaces = $request->user()->workspaces()->with('owner')->get();
@@ -34,6 +34,27 @@ class WorkspaceController extends Controller
             'role' => 'owner',
             'joined_at' => now(),
         ]);
+
+        // Bootstrap free plan subscription and usage period
+        $freePlan = Plan::query()->where('slug', 'free')->first();
+        if ($freePlan) {
+            $subscription = $workspace->subscription()->create([
+                'plan_id' => $freePlan->id,
+                'status' => SubscriptionStatus::Active,
+                'billing_interval' => 'monthly',
+                'credits_monthly' => $freePlan->getLimit('credits_monthly') ?? 0,
+                'current_period_start' => now(),
+                'current_period_end' => now()->addMonth(),
+            ]);
+
+            app(CreditMeterService::class)->createPeriod(
+                workspace: $workspace,
+                start: now(),
+                end: now()->addMonth(),
+                limit: $freePlan->getLimit('credits_monthly') ?? 0,
+                subscriptionId: $subscription->id,
+            );
+        }
 
         $workspace->load('owner');
 

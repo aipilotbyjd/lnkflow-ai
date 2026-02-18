@@ -25,6 +25,7 @@ class PlanResource extends JsonResource
             'price_yearly' => $this->price_yearly,
             'limits' => $this->limits,
             'features' => $this->features,
+            'credit_tiers' => $this->credit_tiers,
         ];
     }
 }

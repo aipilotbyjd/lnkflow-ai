@@ -33,6 +33,7 @@ class Execution extends Model
         'replay_of_execution_id',
         'is_deterministic_replay',
         'estimated_cost_usd',
+        'credits_consumed',
         'ip_address',
         'user_agent',
     ];

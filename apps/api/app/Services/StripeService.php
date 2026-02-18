@@ -196,6 +196,9 @@ class StripeService
 
         $subscription->update([
             'plan_id' => $newPlan->id,
+            'stripe_price_id' => $priceId,
+            'billing_interval' => $billingInterval,
+            'credits_monthly' => $newPlan->getLimit('credits_monthly') ?? 0,
         ]);
     }
 
@@ -216,8 +219,7 @@ class StripeService
      */
     public function getSubscription(string $subscriptionId): StripeSubscription
     {
-        return StripeSubscription::retrieve([
-            'id' => $subscriptionId,
+        return StripeSubscription::retrieve($subscriptionId, [
             'expand' => ['latest_invoice', 'customer'],
         ]);
     }

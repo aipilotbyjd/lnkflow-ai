@@ -13,6 +13,7 @@ use App\Http\Resources\Api\V1\UserResource;
 use App\Models\Plan;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\CreditMeterService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,12 +48,22 @@ class AuthController extends Controller
 
             $freePlan = Plan::query()->where('slug', 'free')->first();
             if ($freePlan) {
-                $workspace->subscription()->create([
+                $subscription = $workspace->subscription()->create([
                     'plan_id' => $freePlan->id,
                     'status' => SubscriptionStatus::Active,
+                    'billing_interval' => 'monthly',
+                    'credits_monthly' => $freePlan->getLimit('credits_monthly') ?? 0,
                     'current_period_start' => now(),
-                    'current_period_end' => now()->addYear(),
+                    'current_period_end' => now()->addMonth(),
                 ]);
+
+                app(CreditMeterService::class)->createPeriod(
+                    workspace: $workspace,
+                    start: now(),
+                    end: now()->addMonth(),
+                    limit: $freePlan->getLimit('credits_monthly') ?? 0,
+                    subscriptionId: $subscription->id,
+                );
             }
 
             return $user;

@@ -22,6 +22,9 @@ class Plan extends Model
         'features',
         'is_active',
         'sort_order',
+        'stripe_product_id',
+        'stripe_prices',
+        'credit_tiers',
     ];
 
     /**
@@ -32,6 +35,8 @@ class Plan extends Model
         return [
             'limits' => 'array',
             'features' => 'array',
+            'stripe_prices' => 'array',
+            'credit_tiers' => 'array',
             'is_active' => 'boolean',
         ];
     }
@@ -55,11 +60,37 @@ class Plan extends Model
 
     public function getLimit(string $key): mixed
     {
-        return $this->limits[$key] ?? null;
+        return ($this->limits ?? [])[$key] ?? null;
     }
 
-    public function hasFeature(string $key): bool
+    public function hasFeature(string $key): mixed
     {
-        return $this->features[$key] ?? false;
+        return ($this->features ?? [])[$key] ?? false;
+    }
+
+    /**
+     * Get the Stripe monthly price ID from the stripe_prices JSON.
+     */
+    public function getStripePriceMonthlyIdAttribute(): ?string
+    {
+        return $this->stripe_prices['monthly'] ?? null;
+    }
+
+    /**
+     * Get the Stripe yearly price ID from the stripe_prices JSON.
+     */
+    public function getStripePriceYearlyIdAttribute(): ?string
+    {
+        return $this->stripe_prices['yearly'] ?? null;
+    }
+
+    /**
+     * Get available credit tier add-on amounts.
+     *
+     * @return array<int>
+     */
+    public function getCreditTierOptions(): array
+    {
+        return $this->credit_tiers ?? [];
     }
 }

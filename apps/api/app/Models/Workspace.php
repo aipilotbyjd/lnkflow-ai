@@ -215,6 +215,38 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<WorkspaceUsagePeriod, $this>
+     */
+    public function usagePeriods(): HasMany
+    {
+        return $this->hasMany(WorkspaceUsagePeriod::class);
+    }
+
+    /**
+     * @return HasMany<CreditPack, $this>
+     */
+    public function creditPacks(): HasMany
+    {
+        return $this->hasMany(CreditPack::class);
+    }
+
+    /**
+     * @return HasMany<CreditTransaction, $this>
+     */
+    public function creditTransactions(): HasMany
+    {
+        return $this->hasMany(CreditTransaction::class);
+    }
+
+    /**
+     * @return HasMany<UsageDailySnapshot, $this>
+     */
+    public function usageDailySnapshots(): HasMany
+    {
+        return $this->hasMany(UsageDailySnapshot::class);
+    }
+
+    /**
      * @return HasOneThrough<Plan, Subscription, $this>
      */
     public function plan(): HasOneThrough

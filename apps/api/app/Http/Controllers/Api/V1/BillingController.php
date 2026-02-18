@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Api\V1\SubscriptionResource;
+use App\Http\Resources\Api\V1\UsagePeriodResource;
 use App\Models\Plan;
 use App\Models\Workspace;
+use App\Services\CreditMeterService;
 use App\Services\StripeService;
 
 use Illuminate\Http\JsonResponse;
@@ -13,7 +16,8 @@ use Illuminate\Http\Request;
 class BillingController extends Controller
 {
     public function __construct(
-        private StripeService $stripeService
+        private StripeService $stripeService,
+        private CreditMeterService $creditMeterService
     ) {}
 
     /**
@@ -24,10 +28,13 @@ class BillingController extends Controller
         $this->authorize('workspace.manage-billing');
 
         $subscription = $workspace->subscription()->with('plan')->first();
+        $usage = $this->creditMeterService->usage($workspace->id);
+        $currentPeriod = $this->creditMeterService->currentPeriod($workspace->id);
 
         return response()->json([
-            'subscription' => $subscription,
-            'customer_id' => $subscription?->stripe_customer_id,
+            'subscription' => $subscription ? new SubscriptionResource($subscription) : null,
+            'usage' => $usage,
+            'current_period' => $currentPeriod ? new UsagePeriodResource($currentPeriod) : null,
             'has_active_subscription' => $subscription?->isActive() ?? false,
         ]);
     }

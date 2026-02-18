@@ -23,7 +23,11 @@ class SubscriptionFactory extends Factory
             'plan_id' => Plan::factory(),
             'stripe_subscription_id' => null,
             'stripe_customer_id' => null,
+            'stripe_price_id' => null,
             'status' => SubscriptionStatus::Active,
+            'billing_interval' => 'monthly',
+            'credits_monthly' => 0,
+            'credits_yearly_pool' => 0,
             'trial_ends_at' => null,
             'current_period_start' => now(),
             'current_period_end' => now()->addMonth(),
@@ -44,6 +48,23 @@ class SubscriptionFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'status' => SubscriptionStatus::Canceled,
             'canceled_at' => now(),
+        ]);
+    }
+
+    public function withStripe(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'stripe_subscription_id' => 'sub_' . fake()->regexify('[A-Za-z0-9]{24}'),
+            'stripe_customer_id' => 'cus_' . fake()->regexify('[A-Za-z0-9]{14}'),
+            'stripe_price_id' => 'price_' . fake()->regexify('[A-Za-z0-9]{24}'),
+        ]);
+    }
+
+    public function yearly(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'billing_interval' => 'yearly',
+            'current_period_end' => now()->addYear(),
         ]);
     }
 }

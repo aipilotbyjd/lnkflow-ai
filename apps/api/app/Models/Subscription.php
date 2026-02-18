@@ -6,6 +6,7 @@ use App\Enums\SubscriptionStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Subscription extends Model
 {
@@ -18,6 +19,10 @@ class Subscription extends Model
         'stripe_subscription_id',
         'stripe_customer_id',
         'status',
+        'billing_interval',
+        'credits_monthly',
+        'credits_yearly_pool',
+        'stripe_price_id',
         'trial_ends_at',
         'current_period_start',
         'current_period_end',
@@ -72,5 +77,23 @@ class Subscription extends Model
     public function onTrial(): bool
     {
         return $this->isTrialing() && $this->trial_ends_at?->isFuture();
+    }
+
+    public function isPastDue(): bool
+    {
+        return $this->status === SubscriptionStatus::PastDue;
+    }
+
+    public function isUsable(): bool
+    {
+        return $this->isActive() || $this->onTrial();
+    }
+
+    /**
+     * @return HasMany<WorkspaceUsagePeriod, $this>
+     */
+    public function usagePeriods(): HasMany
+    {
+        return $this->hasMany(WorkspaceUsagePeriod::class);
     }
 }
