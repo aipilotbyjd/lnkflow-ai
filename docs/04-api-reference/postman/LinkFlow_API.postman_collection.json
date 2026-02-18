@@ -1,8 +1,8 @@
 {
     "info": {
         "_postman_id": "linkflow-api-collection",
-        "name": "🔗 LinkFlow API",
-        "description": "Complete API collection for **LinkFlow** — Workflow Automation Platform\n\n## 🚀 Getting Started\n1. Import this collection and the environment file\n2. Run **Register** or **Login** to get auth tokens\n3. Tokens are saved automatically to `{{access_token}}` and `{{refresh_token}}`\n4. Run **List Workspaces** to populate `{{workspace_id}}`\n5. All authenticated requests inherit the Bearer token\n\n## 🔐 Authentication\nBearer Token via Laravel Passport. Public routes override with `noauth`.\n\n## 📂 Structure\n- **🔐 Auth** — Register, Login, Refresh Token, Password Reset\n- **👤 User Profile** — Profile CRUD, Avatar\n- **🏢 Workspaces** — Workspace management with nested resources\n- **🧩 Nodes** — Node registry (global)\n- **🔓 Credential Types** — Available credential types (global)\n- **📝 Workflow Templates** — Pre-built templates (global)\n- **📋 Plans** — Subscription plans (public)\n- **📡 Public Webhooks** — Incoming webhook receiver\n- **⚙️ Internal** — Engine callbacks & Stripe webhooks\n- **🛡️ Admin** — Super admin panel",
+        "name": "\ud83d\udd17 LinkFlow API",
+        "description": "Complete API collection for **LinkFlow** \u2014 Workflow Automation Platform\n\n## \ud83d\ude80 Getting Started\n1. Import this collection and the environment file\n2. Run **Register** or **Login** to get auth tokens\n3. Tokens are saved automatically to `{{access_token}}` and `{{refresh_token}}`\n4. Run **List Workspaces** to populate `{{workspace_id}}`\n5. All authenticated requests inherit the Bearer token\n\n## \ud83d\udd10 Authentication\nBearer Token via Laravel Passport. Public routes override with `noauth`.\n\n## \ud83d\udcc2 Structure\n- **\ud83d\udd10 Auth** \u2014 Register, Login, Refresh Token, Password Reset\n- **\ud83d\udc64 User Profile** \u2014 Profile CRUD, Avatar\n- **\ud83c\udfe2 Workspaces** \u2014 Workspace management with nested resources\n- **\ud83e\udde9 Nodes** \u2014 Node registry (global)\n- **\ud83d\udd13 Credential Types** \u2014 Available credential types (global)\n- **\ud83d\udcdd Workflow Templates** \u2014 Pre-built templates (global)\n- **\ud83d\udccb Plans** \u2014 Subscription plans (public)\n- **\ud83d\udce1 Public Webhooks** \u2014 Incoming webhook receiver\n- **\u2699\ufe0f Internal** \u2014 Engine callbacks & Stripe webhooks\n- **\ud83d\udee1\ufe0f Admin** \u2014 Super admin panel",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "auth": {
@@ -33,7 +33,7 @@
             "script": {
                 "type": "text/javascript",
                 "exec": [
-                    "console.log('[' + pm.request.method + '] ' + pm.request.url.toString() + ' → ' + pm.response.code + ' (' + pm.response.responseTime + 'ms)');"
+                    "console.log('[' + pm.request.method + '] ' + pm.request.url.toString() + ' \u2192 ' + pm.response.code + ' (' + pm.response.responseTime + 'ms)');"
                 ]
             }
         }
@@ -197,7 +197,7 @@
     ],
     "item": [
         {
-            "name": "💚 Health",
+            "name": "\ud83d\udc9a Health",
             "item": [
                 {
                     "name": "Health Check",
@@ -223,8 +223,8 @@
             ]
         },
         {
-            "name": "🔐 Auth",
-            "description": "Authentication endpoints — registration, login, token refresh, password management, and email verification.",
+            "name": "\ud83d\udd10 Auth",
+            "description": "Authentication endpoints \u2014 registration, login, token refresh, password management, and email verification.",
             "item": [
                 {
                     "name": "Register",
@@ -244,7 +244,7 @@
                                     "    pm.collectionVariables.set('refresh_token', jsonData.refresh_token);",
                                     "    pm.collectionVariables.set('user_id', jsonData.user.id);",
                                     "    pm.collectionVariables.set('user_email', jsonData.user.email);",
-                                    "    console.log('✅ Tokens saved (access + refresh)');",
+                                    "    console.log('\u2705 Tokens saved (access + refresh)');",
                                     "}"
                                 ]
                             }
@@ -297,7 +297,7 @@
                                     "    pm.collectionVariables.set('refresh_token', jsonData.refresh_token);",
                                     "    pm.collectionVariables.set('user_id', jsonData.user.id);",
                                     "    pm.collectionVariables.set('user_email', jsonData.user.email);",
-                                    "    console.log('✅ Tokens saved (access + refresh)');",
+                                    "    console.log('\u2705 Tokens saved (access + refresh)');",
                                     "}"
                                 ]
                             }
@@ -348,7 +348,7 @@
                                     "    var jsonData = pm.response.json();",
                                     "    pm.collectionVariables.set('access_token', jsonData.access_token);",
                                     "    pm.collectionVariables.set('refresh_token', jsonData.refresh_token);",
-                                    "    console.log('🔄 Tokens refreshed');",
+                                    "    console.log('\ud83d\udd04 Tokens refreshed');",
                                     "}"
                                 ]
                             }
@@ -398,7 +398,7 @@
                                     "if (pm.response.code === 200) {",
                                     "    pm.collectionVariables.unset('access_token');",
                                     "    pm.collectionVariables.unset('refresh_token');",
-                                    "    console.log('🔒 Tokens cleared');",
+                                    "    console.log('\ud83d\udd12 Tokens cleared');",
                                     "}"
                                 ]
                             }
@@ -544,7 +544,7 @@
             ]
         },
         {
-            "name": "👤 User Profile",
+            "name": "\ud83d\udc64 User Profile",
             "description": "Manage the authenticated user's profile, password, and avatar.",
             "item": [
                 {
@@ -758,7 +758,7 @@
                                     "    pm.collectionVariables.unset('refresh_token');",
                                     "    pm.collectionVariables.unset('user_id');",
                                     "    pm.collectionVariables.unset('user_email');",
-                                    "    console.log('🗑️ Account deleted, tokens cleared');",
+                                    "    console.log('\ud83d\uddd1\ufe0f Account deleted, tokens cleared');",
                                     "}"
                                 ]
                             }
@@ -783,7 +783,7 @@
             ]
         },
         {
-            "name": "🏢 Workspaces",
+            "name": "\ud83c\udfe2 Workspaces",
             "description": "Workspace management and all workspace-scoped resources (workflows, executions, credentials, etc.).",
             "item": [
                 {
@@ -801,7 +801,7 @@
                                     "var jsonData = pm.response.json();",
                                     "if (jsonData.data && jsonData.data.length > 0) {",
                                     "    pm.collectionVariables.set('workspace_id', jsonData.data[0].id);",
-                                    "    console.log('✅ workspace_id saved: ' + jsonData.data[0].id);",
+                                    "    console.log('\u2705 workspace_id saved: ' + jsonData.data[0].id);",
                                     "}"
                                 ]
                             }
@@ -838,7 +838,7 @@
                                     "var jsonData = pm.response.json();",
                                     "if (jsonData.workspace) {",
                                     "    pm.collectionVariables.set('workspace_id', jsonData.workspace.id);",
-                                    "    console.log('✅ workspace_id saved: ' + jsonData.workspace.id);",
+                                    "    console.log('\u2705 workspace_id saved: ' + jsonData.workspace.id);",
                                     "}"
                                 ]
                             }
@@ -951,12 +951,12 @@
                                 "leave"
                             ]
                         },
-                        "description": "Leave a workspace. The owner cannot leave — must transfer ownership or delete."
+                        "description": "Leave a workspace. The owner cannot leave \u2014 must transfer ownership or delete."
                     },
                     "response": []
                 },
                 {
-                    "name": "👥 Members",
+                    "name": "\ud83d\udc65 Members",
                     "description": "Manage workspace members and their roles.",
                     "item": [
                         {
@@ -974,7 +974,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.length > 1) {",
                                             "    pm.collectionVariables.set('member_id', jsonData.data[1].id);",
-                                            "    console.log('✅ member_id saved: ' + jsonData.data[1].id);",
+                                            "    console.log('\u2705 member_id saved: ' + jsonData.data[1].id);",
                                             "}"
                                         ]
                                     }
@@ -1052,7 +1052,7 @@
                     ]
                 },
                 {
-                    "name": "✉️ Invitations",
+                    "name": "\u2709\ufe0f Invitations",
                     "description": "Send, manage, and respond to workspace invitations.",
                     "item": [
                         {
@@ -1103,7 +1103,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.invitation) {",
                                             "    pm.collectionVariables.set('invitation_id', jsonData.invitation.id);",
-                                            "    console.log('✅ invitation_id saved: ' + jsonData.invitation.id);",
+                                            "    console.log('\u2705 invitation_id saved: ' + jsonData.invitation.id);",
                                             "}"
                                         ]
                                     }
@@ -1206,7 +1206,7 @@
                     ]
                 },
                 {
-                    "name": "💰 Subscription",
+                    "name": "\ud83d\udcb0 Subscription",
                     "description": "Manage workspace subscription plan.",
                     "item": [
                         {
@@ -1281,7 +1281,7 @@
                     ]
                 },
                 {
-                    "name": "⚡ Workflows",
+                    "name": "\u26a1 Workflows",
                     "description": "CRUD operations and actions for workflows within a workspace.",
                     "item": [
                         {
@@ -1319,7 +1319,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data) {",
                                             "    pm.collectionVariables.set('workflow_id', jsonData.data.id);",
-                                            "    console.log('✅ workflow_id saved: ' + jsonData.data.id);",
+                                            "    console.log('\u2705 workflow_id saved: ' + jsonData.data.id);",
                                             "}"
                                         ]
                                     }
@@ -1635,9 +1635,87 @@
                     ]
                 },
                 {
-                    "name": "🔄 Executions",
+                    "name": "\ud83d\udd04 Executions",
                     "description": "Monitor, manage, and trigger workflow executions.",
                     "item": [
+                        {
+                            "name": "\ud83e\udd16 AI Auto-Fix",
+                            "description": "AI-powered execution analysis and auto-fix.",
+                            "item": [
+                                {
+                                    "name": "Analyze Execution",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}/ai/analyze",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "path": [
+                                                "workspaces",
+                                                "{{workspace_id}}",
+                                                "executions",
+                                                "{{execution_id}}",
+                                                "ai",
+                                                "analyze"
+                                            ]
+                                        },
+                                        "description": "Analyze an execution failure to determine root cause.",
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n    \"auto_apply\": false\n}"
+                                        }
+                                    },
+                                    "response": []
+                                },
+                                {
+                                    "name": "Apply Auto-Fix",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            },
+                                            {
+                                                "key": "Accept",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "url": {
+                                            "raw": "{{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}/ai/apply-fix",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "path": [
+                                                "workspaces",
+                                                "{{workspace_id}}",
+                                                "executions",
+                                                "{{execution_id}}",
+                                                "ai",
+                                                "apply-fix"
+                                            ]
+                                        },
+                                        "description": "Apply a suggested fix to the workflow.",
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n    \"suggestion_index\": 0\n}"
+                                        }
+                                    },
+                                    "response": []
+                                }
+                            ]
+                        },
                         {
                             "name": "List Executions",
                             "request": {
@@ -1820,7 +1898,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.id) {",
                                             "    pm.collectionVariables.set('execution_id', jsonData.data.id);",
-                                            "    console.log('✅ execution_id saved: ' + jsonData.data.id);",
+                                            "    console.log('\u2705 execution_id saved: ' + jsonData.data.id);",
                                             "}"
                                         ]
                                     }
@@ -1942,7 +2020,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.execution) {",
                                             "    pm.collectionVariables.set('execution_id', jsonData.execution.id);",
-                                            "    console.log('✅ execution_id saved: ' + jsonData.execution.id);",
+                                            "    console.log('\u2705 execution_id saved: ' + jsonData.execution.id);",
                                             "}"
                                         ]
                                     }
@@ -2029,11 +2107,38 @@
                                 "description": "Compare this execution timeline against another execution ID."
                             },
                             "response": []
+                        },
+                        {
+                            "name": "Stream Execution Logs",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Accept",
+                                        "value": "text/event-stream"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/workspaces/{{workspace_id}}/executions/{{execution_id}}/stream",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "workspaces",
+                                        "{{workspace_id}}",
+                                        "executions",
+                                        "{{execution_id}}",
+                                        "stream"
+                                    ]
+                                },
+                                "description": "Stream live execution logs via Server-Sent Events."
+                            },
+                            "response": []
                         }
                     ]
                 },
                 {
-                    "name": "🔑 Credentials",
+                    "name": "\ud83d\udd11 Credentials",
                     "description": "Manage integration credentials (API keys, OAuth tokens, etc.) for a workspace.",
                     "item": [
                         {
@@ -2067,7 +2172,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.id) {",
                                             "    pm.collectionVariables.set('credential_id', jsonData.data.id);",
-                                            "    console.log('✅ credential_id saved: ' + jsonData.data.id);",
+                                            "    console.log('\u2705 credential_id saved: ' + jsonData.data.id);",
                                             "}"
                                         ]
                                     }
@@ -2197,7 +2302,7 @@
                     ]
                 },
                 {
-                    "name": "🪝 Webhooks",
+                    "name": "\ud83e\ude9d Webhooks",
                     "description": "Manage webhook endpoints for triggering workflows.",
                     "item": [
                         {
@@ -2234,7 +2339,7 @@
                                             "    if (jsonData.data.uuid) {",
                                             "        pm.collectionVariables.set('webhook_uuid', jsonData.data.uuid);",
                                             "    }",
-                                            "    console.log('✅ webhook_id saved: ' + jsonData.data.id);",
+                                            "    console.log('\u2705 webhook_id saved: ' + jsonData.data.id);",
                                             "}"
                                         ]
                                     }
@@ -2430,7 +2535,7 @@
                     ]
                 },
                 {
-                    "name": "📦 Variables",
+                    "name": "\ud83d\udce6 Variables",
                     "description": "Manage workspace-scoped environment variables for use in workflows.",
                     "item": [
                         {
@@ -2464,7 +2569,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.id) {",
                                             "    pm.collectionVariables.set('variable_id', jsonData.data.id);",
-                                            "    console.log('✅ variable_id saved: ' + jsonData.data.id);",
+                                            "    console.log('\u2705 variable_id saved: ' + jsonData.data.id);",
                                             "}"
                                         ]
                                     }
@@ -2572,7 +2677,7 @@
                     ]
                 },
                 {
-                    "name": "🏷️ Tags",
+                    "name": "\ud83c\udff7\ufe0f Tags",
                     "description": "Manage tags for organizing workflows.",
                     "item": [
                         {
@@ -2606,7 +2711,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.id) {",
                                             "    pm.collectionVariables.set('tag_id', jsonData.data.id);",
-                                            "    console.log('✅ tag_id saved: ' + jsonData.data.id);",
+                                            "    console.log('\u2705 tag_id saved: ' + jsonData.data.id);",
                                             "}"
                                         ]
                                     }
@@ -2693,7 +2798,7 @@
                     ]
                 },
                 {
-                    "name": "📋 Activity Log",
+                    "name": "\ud83d\udccb Activity Log",
                     "description": "View workspace activity history.",
                     "item": [
                         {
@@ -2719,8 +2824,8 @@
                     ]
                 },
                 {
-                    "name": "💳 Billing",
-                    "description": "Stripe billing management — checkout, portal, plan changes.",
+                    "name": "\ud83d\udcb3 Billing",
+                    "description": "Stripe billing management \u2014 checkout, portal, plan changes.",
                     "item": [
                         {
                             "name": "Get Billing Info",
@@ -2868,8 +2973,8 @@
                     ]
                 },
                 {
-                    "name": "📌 Workflow Versions",
-                    "description": "Version control for workflows — create snapshots, compare, publish, and restore.",
+                    "name": "\ud83d\udccc Workflow Versions",
+                    "description": "Version control for workflows \u2014 create snapshots, compare, publish, and restore.",
                     "item": [
                         {
                             "name": "List Versions",
@@ -2904,7 +3009,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.id) {",
                                             "    pm.collectionVariables.set('version_id', jsonData.data.id);",
-                                            "    console.log('✅ version_id saved: ' + jsonData.data.id);",
+                                            "    console.log('\u2705 version_id saved: ' + jsonData.data.id);",
                                             "}"
                                         ]
                                     }
@@ -3048,7 +3153,7 @@
                     ]
                 },
                 {
-                    "name": "📤 Workflow Import/Export",
+                    "name": "\ud83d\udce4 Workflow Import/Export",
                     "description": "Import and export workflows as JSON files.",
                     "item": [
                         {
@@ -3138,7 +3243,7 @@
                     ]
                 },
                 {
-                    "name": "🧠 Contracts",
+                    "name": "\ud83e\udde0 Contracts",
                     "description": "Workspace-level contract compilation and test runs.",
                     "item": [
                         {
@@ -3166,7 +3271,7 @@
                     ]
                 },
                 {
-                    "name": "🧑‍⚖️ Approvals",
+                    "name": "\ud83e\uddd1\u200d\u2696\ufe0f Approvals",
                     "description": "Human-in-the-loop approval queue and decisions.",
                     "item": [
                         {
@@ -3201,7 +3306,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.length > 0) {",
                                             "    pm.collectionVariables.set('approval_id', jsonData.data[0].id);",
-                                            "    console.log('✅ approval_id saved: ' + jsonData.data[0].id);",
+                                            "    console.log('\u2705 approval_id saved: ' + jsonData.data[0].id);",
                                             "}"
                                         ]
                                     }
@@ -3263,7 +3368,7 @@
                     ]
                 },
                 {
-                    "name": "🛡️ Policy",
+                    "name": "\ud83d\udee1\ufe0f Policy",
                     "description": "Workspace governance and guardrails.",
                     "item": [
                         {
@@ -3318,7 +3423,7 @@
                     ]
                 },
                 {
-                    "name": "📈 Connector Reliability",
+                    "name": "\ud83d\udcc8 Connector Reliability",
                     "description": "Connector quality metrics and call attempts.",
                     "item": [
                         {
@@ -3364,7 +3469,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.metrics && jsonData.metrics.length > 0) {",
                                             "    pm.collectionVariables.set('connector_key', jsonData.metrics[0].connector_key);",
-                                            "    console.log('✅ connector_key saved: ' + jsonData.metrics[0].connector_key);",
+                                            "    console.log('\u2705 connector_key saved: ' + jsonData.metrics[0].connector_key);",
                                             "}"
                                         ]
                                     }
@@ -3403,7 +3508,7 @@
                     ]
                 },
                 {
-                    "name": "💸 Optimizations",
+                    "name": "\ud83d\udcb8 Optimizations",
                     "description": "Cost optimization recommendations and execution estimates.",
                     "item": [
                         {
@@ -3452,7 +3557,7 @@
                     ]
                 },
                 {
-                    "name": "🌿 Environments",
+                    "name": "\ud83c\udf3f Environments",
                     "description": "Workspace environment definitions used for promotions.",
                     "item": [
                         {
@@ -3491,7 +3596,7 @@
                                             "    if (jsonData.data.length > 1) {",
                                             "        pm.collectionVariables.set('to_environment_id', jsonData.data[1].id);",
                                             "    }",
-                                            "    console.log('✅ environment_id saved: ' + jsonData.data[0].id);",
+                                            "    console.log('\u2705 environment_id saved: ' + jsonData.data[0].id);",
                                             "}"
                                         ]
                                     }
@@ -3540,7 +3645,7 @@
                                             "if (jsonData.environment) {",
                                             "    pm.collectionVariables.set('environment_id', jsonData.environment.id);",
                                             "    pm.collectionVariables.set('to_environment_id', jsonData.environment.id);",
-                                            "    console.log('✅ environment_id saved: ' + jsonData.environment.id);",
+                                            "    console.log('\u2705 environment_id saved: ' + jsonData.environment.id);",
                                             "}"
                                         ]
                                     }
@@ -3550,7 +3655,7 @@
                     ]
                 },
                 {
-                    "name": "🧯 Runbooks",
+                    "name": "\ud83e\uddef Runbooks",
                     "description": "Failure runbooks generated from execution incidents.",
                     "item": [
                         {
@@ -3591,7 +3696,7 @@
                                             "var jsonData = pm.response.json();",
                                             "if (jsonData.data && jsonData.data.length > 0) {",
                                             "    pm.collectionVariables.set('runbook_id', jsonData.data[0].id);",
-                                            "    console.log('✅ runbook_id saved: ' + jsonData.data[0].id);",
+                                            "    console.log('\u2705 runbook_id saved: ' + jsonData.data[0].id);",
                                             "}"
                                         ]
                                     }
@@ -3664,11 +3769,176 @@
                             "response": []
                         }
                     ]
+                },
+                {
+                    "name": "\ud83e\udd16 AI Workflow Generator",
+                    "description": "Generate and refine workflows using AI.",
+                    "item": [
+                        {
+                            "name": "Generate Workflow",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/workspaces/{{workspace_id}}/ai/generate-workflow",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "workspaces",
+                                        "{{workspace_id}}",
+                                        "ai",
+                                        "generate-workflow"
+                                    ]
+                                },
+                                "description": "Generate a new workflow from a natural language prompt.",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"prompt\": \"Create a workflow that syncs HubSpot contacts to Google Sheets every hour.\",\n    \"options\": {\n        \"dry_run\": false\n    },\n    \"credential_ids\": []\n}"
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Refine Workflow",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/workspaces/{{workspace_id}}/ai/refine-workflow",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "workspaces",
+                                        "{{workspace_id}}",
+                                        "ai",
+                                        "refine-workflow"
+                                    ]
+                                },
+                                "description": "Refine an existing workflow based on feedback.",
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n    \"generation_log_id\": \"uuid-of-generation-log\",\n    \"feedback\": \"Add a filter node before the Google Sheets node to only sync contacts with email.\"\n}"
+                                }
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Generation History",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/workspaces/{{workspace_id}}/ai/generation-history",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "workspaces",
+                                        "{{workspace_id}}",
+                                        "ai",
+                                        "generation-history"
+                                    ]
+                                },
+                                "description": "List past AI workflow generation requests."
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Delete Generation Log",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/workspaces/{{workspace_id}}/ai/generation-history/{{log_id}}",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "workspaces",
+                                        "{{workspace_id}}",
+                                        "ai",
+                                        "generation-history",
+                                        "{{log_id}}"
+                                    ]
+                                },
+                                "description": "Delete a specific generation log entry."
+                            },
+                            "response": []
+                        },
+                        {
+                            "name": "Fix History",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    },
+                                    {
+                                        "key": "Accept",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/workspaces/{{workspace_id}}/ai/fix-history",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "workspaces",
+                                        "{{workspace_id}}",
+                                        "ai",
+                                        "fix-history"
+                                    ]
+                                },
+                                "description": "List past AI auto-fix attempts."
+                            },
+                            "response": []
+                        }
+                    ]
                 }
             ]
         },
         {
-            "name": "🧩 Nodes",
+            "name": "\ud83e\udde9 Nodes",
             "description": "Browse and search the node registry. Nodes are the building blocks of workflows.",
             "item": [
                 {
@@ -3756,7 +4026,7 @@
             ]
         },
         {
-            "name": "🔓 Credential Types",
+            "name": "\ud83d\udd13 Credential Types",
             "description": "Browse available credential types and their configuration schemas.",
             "item": [
                 {
@@ -3799,7 +4069,7 @@
             ]
         },
         {
-            "name": "📝 Workflow Templates",
+            "name": "\ud83d\udcdd Workflow Templates",
             "description": "Browse and use pre-built workflow templates.",
             "item": [
                 {
@@ -3890,7 +4160,7 @@
             ]
         },
         {
-            "name": "📋 Plans",
+            "name": "\ud83d\udccb Plans",
             "description": "Browse available subscription plans (public, no auth required).",
             "item": [
                 {
@@ -3908,7 +4178,7 @@
                                     "var jsonData = pm.response.json();",
                                     "if (jsonData.data && jsonData.data.length > 0) {",
                                     "    pm.collectionVariables.set('plan_id', jsonData.data[0].id);",
-                                    "    console.log('✅ plan_id saved: ' + jsonData.data[0].id);",
+                                    "    console.log('\u2705 plan_id saved: ' + jsonData.data[0].id);",
                                     "}"
                                 ]
                             }
@@ -3936,8 +4206,8 @@
             ]
         },
         {
-            "name": "📡 Public Webhooks",
-            "description": "Incoming webhook receiver — triggers workflow executions. No authentication required.",
+            "name": "\ud83d\udce1 Public Webhooks",
+            "description": "Incoming webhook receiver \u2014 triggers workflow executions. No authentication required.",
             "item": [
                 {
                     "name": "Trigger Webhook",
@@ -4006,11 +4276,11 @@
             ]
         },
         {
-            "name": "⚙️ Internal",
+            "name": "\u2699\ufe0f Internal",
             "description": "Internal endpoints used by the Go engine and Stripe. Not for direct API consumption.",
             "item": [
                 {
-                    "name": "🔧 Job Callbacks",
+                    "name": "\ud83d\udd27 Job Callbacks",
                     "description": "Callbacks from the Go execution engine (HMAC-signed).",
                     "item": [
                         {
@@ -4088,7 +4358,7 @@
                     ]
                 },
                 {
-                    "name": "💳 Stripe Webhook",
+                    "name": "\ud83d\udcb3 Stripe Webhook",
                     "description": "Stripe webhook endpoint for payment event processing.",
                     "item": [
                         {
@@ -4135,7 +4405,7 @@
             ]
         },
         {
-            "name": "🛡️ Admin",
+            "name": "\ud83d\udee1\ufe0f Admin",
             "description": "Super Admin panel endpoints. Uses session-based authentication (not Bearer tokens).",
             "item": [
                 {
