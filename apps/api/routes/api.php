@@ -24,6 +24,8 @@
 
 use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\V1\ActivityLogController;
+use App\Http\Controllers\Api\V1\AiAutoFixController;
+use App\Http\Controllers\Api\V1\AiWorkflowGeneratorController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BillingController;
 use App\Http\Controllers\Api\V1\ConnectorReliabilityController;
@@ -31,6 +33,7 @@ use App\Http\Controllers\Api\V1\CredentialController;
 use App\Http\Controllers\Api\V1\CredentialTypeController;
 use App\Http\Controllers\Api\V1\ExecutionController;
 use App\Http\Controllers\Api\V1\ExecutionDebuggerController;
+use App\Http\Controllers\Api\V1\ExecutionStreamController;
 use App\Http\Controllers\Api\V1\ExecutionRunbookController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\JobCallbackController;
@@ -307,6 +310,27 @@ Route::prefix('v1')->as('v1.')->group(function () {
 
                 Route::get('optimizations', [OptimizationController::class, 'index'])->name('optimizations.index');
                 Route::post('optimizations/executions/{execution}/estimate', [OptimizationController::class, 'estimateExecution'])->name('optimizations.executions.estimate');
+
+                // ── AI Workflow Generator ────────────────────────────
+
+                Route::prefix('ai')->as('ai.')->group(function () {
+                    Route::post('generate-workflow', [AiWorkflowGeneratorController::class, 'generate'])->name('generate-workflow');
+                    Route::post('refine-workflow', [AiWorkflowGeneratorController::class, 'refine'])->name('refine-workflow');
+                    Route::get('generation-history', [AiWorkflowGeneratorController::class, 'history'])->name('generation-history');
+                    Route::delete('generation-history/{aiGenerationLog}', [AiWorkflowGeneratorController::class, 'destroyHistory'])->name('generation-history.destroy');
+                    Route::get('fix-history', [AiAutoFixController::class, 'fixHistory'])->name('fix-history');
+                });
+
+                // ── AI Auto-Fix ─────────────────────────────────────
+
+                Route::prefix('executions/{execution}/ai')->as('executions.ai.')->group(function () {
+                    Route::post('analyze', [AiAutoFixController::class, 'analyze'])->name('analyze');
+                    Route::post('apply-fix', [AiAutoFixController::class, 'applyFix'])->name('apply-fix');
+                });
+
+                // ── Live Execution Streaming ────────────────────────
+
+                Route::get('executions/{execution}/stream', [ExecutionStreamController::class, 'stream'])->name('executions.stream');
             });
 
         /*

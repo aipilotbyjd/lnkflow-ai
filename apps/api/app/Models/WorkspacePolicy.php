@@ -20,6 +20,8 @@ class WorkspacePolicy extends Model
         'max_execution_cost_usd',
         'max_ai_tokens',
         'redaction_rules',
+        'ai_auto_fix_enabled',
+        'ai_auto_fix_confidence_threshold',
     ];
 
     /**
@@ -35,6 +37,8 @@ class WorkspacePolicy extends Model
             'blocked_ai_models' => 'array',
             'redaction_rules' => 'array',
             'max_execution_cost_usd' => 'decimal:4',
+            'ai_auto_fix_enabled' => 'boolean',
+            'ai_auto_fix_confidence_threshold' => 'decimal:2',
         ];
     }
 

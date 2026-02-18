@@ -29,6 +29,8 @@ class UpsertWorkspacePolicyRequest extends FormRequest
             'max_execution_cost_usd' => ['nullable', 'numeric', 'min:0'],
             'max_ai_tokens' => ['nullable', 'integer', 'min:1'],
             'redaction_rules' => ['nullable', 'array'],
+            'ai_auto_fix_enabled' => ['nullable', 'boolean'],
+            'ai_auto_fix_confidence_threshold' => ['nullable', 'numeric', 'min:0', 'max:1'],
         ];
     }
 }

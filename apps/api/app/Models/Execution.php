@@ -159,6 +159,14 @@ class Execution extends Model
         return $this->hasOne(ExecutionRunbook::class);
     }
 
+    /**
+     * @return HasOne<AiFixSuggestion, $this>
+     */
+    public function aiFixSuggestion(): HasOne
+    {
+        return $this->hasOne(AiFixSuggestion::class);
+    }
+
     public function scopeByStatus($query, ExecutionStatus $status)
     {
         return $query->where('status', $status);

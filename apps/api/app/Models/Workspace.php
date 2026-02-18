@@ -199,6 +199,22 @@ class Workspace extends Model
     }
 
     /**
+     * @return HasMany<AiGenerationLog, $this>
+     */
+    public function aiGenerationLogs(): HasMany
+    {
+        return $this->hasMany(AiGenerationLog::class);
+    }
+
+    /**
+     * @return HasMany<AiFixSuggestion, $this>
+     */
+    public function aiFixSuggestions(): HasMany
+    {
+        return $this->hasMany(AiFixSuggestion::class);
+    }
+
+    /**
      * @return HasOneThrough<Plan, Subscription, $this>
      */
     public function plan(): HasOneThrough

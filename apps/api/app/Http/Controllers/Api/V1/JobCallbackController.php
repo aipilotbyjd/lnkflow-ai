@@ -11,11 +11,14 @@ use App\Models\JobStatus;
 use App\Services\ConnectorReliabilityService;
 use App\Services\CostOptimizerService;
 use App\Services\DeterministicReplayService;
+use App\Jobs\AnalyzeFailedExecution;
 use App\Services\RunbookService;
 use App\Services\WorkflowApprovalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 
 class JobCallbackController extends Controller
 {
@@ -149,6 +152,24 @@ class JobCallbackController extends Controller
                         ]);
                     }
 
+                    // Publish SSE event for node status
+                    $this->publishStreamEvent($execution->id, [
+                        'event' => $nodeStatus === 'failed' ? 'node.failed' : ($nodeStatus === 'completed' ? 'node.completed' : 'node.started'),
+                        'execution_id' => $execution->id,
+                        'node_key' => $nodeData['node_id'],
+                        'data' => [
+                            'status' => $nodeStatus,
+                            'duration_ms' => isset($nodeData['started_at'], $nodeData['completed_at'])
+                                ? (int) (strtotime($nodeData['completed_at']) - strtotime($nodeData['started_at'])) * 1000
+                                : null,
+                            'output_summary' => $nodeStatus === 'completed' ? [
+                                'output_keys' => is_array($nodeData['output'] ?? null) ? array_keys($nodeData['output']) : [],
+                            ] : null,
+                            'error' => $nodeStatus === 'failed' ? ($nodeData['error']['message'] ?? null) : null,
+                        ],
+                        'timestamp' => $nodeData['completed_at'] ?? $nodeData['started_at'] ?? now()->toIso8601String(),
+                    ]);
+
                     if (($nodeData['node_type'] ?? '') === 'action_approval'
                         && in_array($validated['status'], ['waiting', 'failed'], true)
                     ) {
@@ -197,6 +218,26 @@ class JobCallbackController extends Controller
 
             if ($validated['status'] === 'failed') {
                 $this->runbookService->ensureFailureRunbook($execution->fresh(['nodes']), $validated['error'] ?? null);
+            }
+
+            // Publish execution-level SSE event
+            if (in_array($validated['status'], ['completed', 'failed'], true)) {
+                $this->publishStreamEvent($execution->id, [
+                    'event' => $validated['status'] === 'completed' ? 'execution.completed' : 'execution.failed',
+                    'execution_id' => $execution->id,
+                    'data' => [
+                        'status' => $validated['status'],
+                        'total_duration_ms' => $validated['duration_ms'] ?? null,
+                        'node_count' => count($validated['nodes'] ?? []),
+                        'error' => $validated['status'] === 'failed' ? ($validated['error']['message'] ?? null) : null,
+                    ],
+                    'timestamp' => now()->toIso8601String(),
+                ]);
+            }
+
+            // Dispatch AI auto-fix analysis for failed executions
+            if ($validated['status'] === 'failed') {
+                AnalyzeFailedExecution::dispatch($execution->fresh());
             }
 
             if (! empty($validated['connector_attempts'])) {
@@ -258,6 +299,17 @@ class JobCallbackController extends Controller
 
         $jobStatus->updateProgress($validated['progress']);
 
+        // Publish progress to SSE stream
+        $this->publishStreamEvent($jobStatus->execution_id, [
+            'event' => 'node.started',
+            'execution_id' => $jobStatus->execution_id,
+            'node_key' => $validated['current_node'] ?? null,
+            'data' => [
+                'progress' => $validated['progress'],
+            ],
+            'timestamp' => now()->toIso8601String(),
+        ]);
+
         if (! empty($validated['connector_attempts']) || ! empty($validated['deterministic_fixtures'])) {
             $execution = Execution::query()->find($jobStatus->execution_id);
             if ($execution) {
@@ -277,5 +329,28 @@ class JobCallbackController extends Controller
         }
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Publish an event to the execution's SSE Redis stream.
+     *
+     * @param  array<string, mixed>  $eventData
+     */
+    private function publishStreamEvent(int $executionId, array $eventData): void
+    {
+        $channelKey = "execution:{$executionId}:events";
+
+        try {
+            Redis::xadd($channelKey, '*', [
+                'payload' => json_encode($eventData, JSON_UNESCAPED_SLASHES),
+            ]);
+
+            Redis::expire($channelKey, 300);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to publish SSE event', [
+                'execution_id' => $executionId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -26,6 +26,8 @@ class WorkspacePolicyResource extends JsonResource
             'max_execution_cost_usd' => $this->max_execution_cost_usd !== null ? (float) $this->max_execution_cost_usd : null,
             'max_ai_tokens' => $this->max_ai_tokens,
             'redaction_rules' => $this->redaction_rules ?? [],
+            'ai_auto_fix_enabled' => $this->ai_auto_fix_enabled,
+            'ai_auto_fix_confidence_threshold' => $this->ai_auto_fix_confidence_threshold !== null ? (float) $this->ai_auto_fix_confidence_threshold : null,
             'updated_at' => $this->updated_at,
         ];
     }

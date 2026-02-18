@@ -1,7 +1,7 @@
 # Live Execution Streaming
 
 ## Status
-🟡 Planned
+🟢 Implemented
 
 ## Priority
 High

@@ -41,4 +41,9 @@ return [
         'send_sensitive_context' => env('LINKFLOW_SEND_SENSITIVE_CONTEXT', false),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'model' => env('AI_MODEL', 'gpt-4'),
+    ],
+
 ];
