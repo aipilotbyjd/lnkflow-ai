@@ -827,14 +827,29 @@ func (s *Service) startTimeoutChecker() {
 }
 
 // checkExecutionTimeouts checks running executions for timeout violations.
+// Uses batched processing with a cap to prevent unbounded DB load.
 func (s *Service) checkExecutionTimeouts(ctx context.Context) {
+	const maxExecutionsPerCheck = 100
+
 	keys, err := s.stateStore.ListRunningExecutions(ctx)
 	if err != nil {
 		s.logger.Warn("failed to list running executions for timeout check", "error", err)
 		return
 	}
 
+	if len(keys) > maxExecutionsPerCheck {
+		s.logger.Warn("timeout check truncated; consider using timer-based timeouts",
+			slog.Int("total_running", len(keys)),
+			slog.Int("checked", maxExecutionsPerCheck),
+		)
+		keys = keys[:maxExecutionsPerCheck]
+	}
+
 	for _, key := range keys {
+		if ctx.Err() != nil {
+			return
+		}
+
 		state, err := s.stateStore.GetMutableState(ctx, key)
 		if err != nil {
 			s.logger.Warn("failed to get state for timeout check", "error", err, "workflow_id", key.WorkflowID)

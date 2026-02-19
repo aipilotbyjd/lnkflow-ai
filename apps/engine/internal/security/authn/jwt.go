@@ -265,10 +265,13 @@ func ExtractToken(r *http.Request) (string, error) {
 	return "", errors.New("no token found")
 }
 
+const maxAPIKeyCacheSize = 10000
+
 // APIKeyValidator validates API keys.
 type APIKeyValidator struct {
-	keys   map[string]*APIKey
-	keysMu sync.RWMutex
+	keys       map[string]*APIKey
+	cacheOrder []string
+	keysMu     sync.RWMutex
 
 	loader APIKeyLoader
 }
@@ -292,8 +295,9 @@ type APIKeyLoader interface {
 // NewAPIKeyValidator creates a new API key validator.
 func NewAPIKeyValidator(loader APIKeyLoader) *APIKeyValidator {
 	return &APIKeyValidator{
-		keys:   make(map[string]*APIKey),
-		loader: loader,
+		keys:       make(map[string]*APIKey),
+		cacheOrder: make([]string, 0, maxAPIKeyCacheSize),
+		loader:     loader,
 	}
 }
 
@@ -324,9 +328,16 @@ func (v *APIKeyValidator) Validate(ctx context.Context, key string) (*APIKey, er
 		return nil, ErrTokenInvalid
 	}
 
-	// Cache
+	// Cache with bounded size to prevent memory exhaustion
 	v.keysMu.Lock()
+	if len(v.keys) >= maxAPIKeyCacheSize {
+		// Evict oldest entry
+		oldest := v.cacheOrder[0]
+		v.cacheOrder = v.cacheOrder[1:]
+		delete(v.keys, oldest)
+	}
 	v.keys[key] = apiKey
+	v.cacheOrder = append(v.cacheOrder, key)
 	v.keysMu.Unlock()
 
 	return apiKey, nil

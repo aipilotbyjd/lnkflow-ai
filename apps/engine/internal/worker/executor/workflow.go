@@ -51,6 +51,15 @@ func (e *WorkflowExecutor) Execute(ctx context.Context, req *ExecuteRequest) (*E
 		return nil, fmt.Errorf("history is empty")
 	}
 
+	// TODO: Implement sticky execution caching to avoid full history replay.
+	// For now, log a warning when history is large to track performance impact.
+	if len(events) > 500 {
+		e.logger.Warn("large history replay detected; consider implementing sticky execution",
+			slog.String("workflow_id", req.WorkflowID),
+			slog.Int("event_count", len(events)),
+		)
+	}
+
 	// 2. Parse Payload from ExecutionStarted
 	var payload JobPayload
 	var payloadFound bool

@@ -101,14 +101,16 @@ func (s *MemoryTaskStore) Len(ctx context.Context) (int64, error) {
 
 // RedisTaskStore is a Redis-backed implementation of TaskStore.
 type RedisTaskStore struct {
-	client   *redis.Client
-	queueKey string
+	client        *redis.Client
+	queueKey      string
+	processingKey string
 }
 
 func NewRedisTaskStore(client *redis.Client, queueName string) *RedisTaskStore {
 	return &RedisTaskStore{
-		client:   client,
-		queueKey: fmt.Sprintf("taskqueue:%s", queueName),
+		client:        client,
+		queueKey:      fmt.Sprintf("taskqueue:%s", queueName),
+		processingKey: fmt.Sprintf("taskqueue:%s:processing", queueName),
 	}
 }
 
@@ -125,29 +127,50 @@ func (s *RedisTaskStore) PollTask(ctx context.Context, timeout time.Duration) (*
 		return nil, err
 	}
 
-	// BLPOP returns [key, value]
-	results, err := s.client.BLPop(ctx, timeout, s.queueKey).Result()
+	// LMOVE atomically moves a task from the main queue to the processing queue.
+	// If the worker crashes, the task remains in the processing queue for redelivery.
+	result, err := s.client.LMove(ctx, s.queueKey, s.processingKey, "LEFT", "RIGHT").Result()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, nil
+			// No tasks available; sleep briefly to avoid busy-spinning
+			select {
+			case <-time.After(timeout):
+				return nil, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
 		}
 		return nil, err
 	}
 
-	if len(results) < 2 {
-		return nil, nil
-	}
-
 	var task Task
-	if err := json.Unmarshal([]byte(results[1]), &task); err != nil {
+	if err := json.Unmarshal([]byte(result), &task); err != nil {
 		return nil, err
 	}
 	return &task, nil
 }
 
 func (s *RedisTaskStore) AckTask(ctx context.Context, taskID string) (bool, error) {
-	// In Redis List model, pop removes it.
-	// For reliability, we should use RPOPLPUSH to a processing queue, but keeping it simple for now.
+	// Remove the acknowledged task from the processing queue.
+	// We scan the processing list for the task with this ID and remove it.
+	items, err := s.client.LRange(ctx, s.processingKey, 0, -1).Result()
+	if err != nil {
+		return false, err
+	}
+	for _, item := range items {
+		var t Task
+		if err := json.Unmarshal([]byte(item), &t); err != nil {
+			continue
+		}
+		if t.ID == taskID {
+			// LREM removes the first occurrence
+			removed, err := s.client.LRem(ctx, s.processingKey, 1, item).Result()
+			if err != nil {
+				return false, err
+			}
+			return removed > 0, nil
+		}
+	}
 	return false, nil
 }
 

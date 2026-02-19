@@ -3,8 +3,10 @@ package visibility
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	apiv1 "github.com/linkflow/engine/api/gen/linkflow/api/v1"
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
@@ -82,33 +84,72 @@ func (s *PostgresStore) ListClosedWorkflowExecutions(ctx context.Context, req *L
 }
 
 func (s *PostgresStore) listExecutions(ctx context.Context, req *ListRequest, open bool) (*ListResponse, error) {
-	var query string
-	if open {
-		query = `
-			SELECT workflow_id, run_id, workflow_type, start_time, close_time, status, memo
-			FROM executions_visibility
-			WHERE namespace_id = $1 AND status = 1
-			ORDER BY start_time DESC
-			LIMIT $2 OFFSET $3
-		`
-	} else {
-		query = `
-			SELECT workflow_id, run_id, workflow_type, start_time, close_time, status, memo
-			FROM executions_visibility
-			WHERE namespace_id = $1 AND status != 1
-			ORDER BY close_time DESC
-			LIMIT $2 OFFSET $3
-		`
-	}
-
-	// Simple offset pagination for now (should use token)
-	offset := 0 // TODO: Decode token
 	limit := req.PageSize
 	if limit == 0 {
 		limit = 100
 	}
 
-	rows, err := s.pool.Query(ctx, query, req.NamespaceID, limit, offset)
+	// Decode cursor from NextPageToken (format: "timestamp|run_id")
+	var cursorTime *time.Time
+	var cursorRunID string
+	if len(req.NextPageToken) > 0 {
+		parts := strings.SplitN(string(req.NextPageToken), "|", 2)
+		if len(parts) == 2 {
+			t, err := time.Parse(time.RFC3339Nano, parts[0])
+			if err == nil {
+				cursorTime = &t
+				cursorRunID = parts[1]
+			}
+		}
+	}
+
+	var rows pgx.Rows
+	var err error
+
+	if cursorTime != nil {
+		var query string
+		if open {
+			query = `
+				SELECT workflow_id, run_id, workflow_type, start_time, close_time, status, memo
+				FROM executions_visibility
+				WHERE namespace_id = $1 AND status = 1
+				  AND (start_time, run_id) < ($4, $5)
+				ORDER BY start_time DESC, run_id DESC
+				LIMIT $2
+			`
+		} else {
+			query = `
+				SELECT workflow_id, run_id, workflow_type, start_time, close_time, status, memo
+				FROM executions_visibility
+				WHERE namespace_id = $1 AND status != 1
+				  AND (close_time, run_id) < ($4, $5)
+				ORDER BY close_time DESC, run_id DESC
+				LIMIT $2
+			`
+		}
+		rows, err = s.pool.Query(ctx, query, req.NamespaceID, limit+1, nil, *cursorTime, cursorRunID)
+	} else {
+		var query string
+		if open {
+			query = `
+				SELECT workflow_id, run_id, workflow_type, start_time, close_time, status, memo
+				FROM executions_visibility
+				WHERE namespace_id = $1 AND status = 1
+				ORDER BY start_time DESC, run_id DESC
+				LIMIT $2
+			`
+		} else {
+			query = `
+				SELECT workflow_id, run_id, workflow_type, start_time, close_time, status, memo
+				FROM executions_visibility
+				WHERE namespace_id = $1 AND status != 1
+				ORDER BY close_time DESC, run_id DESC
+				LIMIT $2
+			`
+		}
+		rows, err = s.pool.Query(ctx, query, req.NamespaceID, limit+1)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +187,22 @@ func (s *PostgresStore) listExecutions(ctx context.Context, req *ListRequest, op
 		infos = append(infos, info)
 	}
 
-	return &ListResponse{
-		Executions: infos,
-	}, nil
+	resp := &ListResponse{}
+
+	// If we got more than limit, there's a next page
+	if len(infos) > limit {
+		infos = infos[:limit]
+		last := infos[len(infos)-1]
+		// Build cursor from the last entry's sort column + run_id
+		var cursorTimeStr string
+		if open {
+			cursorTimeStr = last.StartTime.Format(time.RFC3339Nano)
+		} else {
+			cursorTimeStr = last.CloseTime.Format(time.RFC3339Nano)
+		}
+		resp.NextPageToken = []byte(cursorTimeStr + "|" + last.Execution.RunId)
+	}
+
+	resp.Executions = infos
+	return resp, nil
 }

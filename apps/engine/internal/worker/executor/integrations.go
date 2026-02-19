@@ -74,15 +74,8 @@ type DiscordEmbedMedia struct {
 
 // NewDiscordExecutor creates a new Discord executor with connection pooling.
 func NewDiscordExecutor() *DiscordExecutor {
-	// Configure transport with connection pooling
-	transport := &http.Transport{
-		MaxIdleConns:        50,
-		MaxIdleConnsPerHost: 10,
-		MaxConnsPerHost:     20,
-		IdleConnTimeout:     90 * time.Second,
-		DisableCompression:  false,
-		ForceAttemptHTTP2:   true,
-	}
+	// Configure SSRF-safe transport with connection pooling
+	transport := newSSRFSafeTransport()
 
 	// Get default token from environment
 	defaultToken := os.Getenv("DISCORD_BOT_TOKEN")
@@ -274,15 +267,8 @@ type TwilioConfig struct {
 
 // NewTwilioExecutor creates a new Twilio executor with connection pooling.
 func NewTwilioExecutor() *TwilioExecutor {
-	// Configure transport with connection pooling for Twilio API
-	transport := &http.Transport{
-		MaxIdleConns:        50,
-		MaxIdleConnsPerHost: 10, // Most calls to api.twilio.com
-		MaxConnsPerHost:     20,
-		IdleConnTimeout:     90 * time.Second,
-		DisableCompression:  false,
-		ForceAttemptHTTP2:   true,
-	}
+	// Configure SSRF-safe transport with connection pooling for Twilio API
+	transport := newSSRFSafeTransport()
 
 	// Get credentials from environment
 	accountSid := os.Getenv("TWILIO_ACCOUNT_SID")

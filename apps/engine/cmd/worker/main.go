@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/linkflow/engine/internal/version"
@@ -48,7 +50,21 @@ func run() error {
 	}
 
 	// Connect to History Service
-	historyConn, err := grpc.NewClient(*historyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	var grpcOpts []grpc.DialOption
+	if tlsCert := getEnv("GRPC_TLS_CERT_FILE", ""); tlsCert != "" {
+		creds, err := credentials.NewClientTLSFromFile(tlsCert, "")
+		if err != nil {
+			return fmt.Errorf("failed to load TLS credentials: %w", err)
+		}
+		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(creds))
+	} else if getEnv("GRPC_TLS_INSECURE", "false") == "true" || getEnv("LINKFLOW_ENV", "development") == "development" {
+		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		logger.Warn("gRPC using insecure plaintext connection; set GRPC_TLS_CERT_FILE for production")
+	} else {
+		// Default to system TLS in production
+		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})))
+	}
+	historyConn, err := grpc.NewClient(*historyAddr, grpcOpts...)
 	if err != nil {
 		logger.Error("failed to connect to history service", slog.String("error", err.Error()))
 		os.Exit(1)

@@ -105,7 +105,7 @@ func NewSandbox(config Config) (*Sandbox, error) {
 		runtimes: make(map[string]Runtime),
 	}
 
-	// Register built-in runtimes
+	// Register built-in runtimes (they enforce ExecutionModeContainer; host-based execution is disabled)
 	sandbox.RegisterRuntime(&NodeJSRuntime{})
 	sandbox.RegisterRuntime(&PythonRuntime{})
 	sandbox.RegisterRuntime(&BashRuntime{})
@@ -183,6 +183,10 @@ func (r *NodeJSRuntime) Available() bool {
 }
 
 func (r *NodeJSRuntime) Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResult, error) {
+	if req.Mode != ExecutionModeContainer {
+		return nil, fmt.Errorf("%w: host-based code execution is disabled for security; use ExecutionModeContainer with ContainerRuntime instead", ErrSandboxNotAvailable)
+	}
+
 	result := &ExecutionResult{}
 
 	// Create temp file
@@ -266,6 +270,10 @@ func (r *PythonRuntime) Available() bool {
 }
 
 func (r *PythonRuntime) Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResult, error) {
+	if req.Mode != ExecutionModeContainer {
+		return nil, fmt.Errorf("%w: host-based code execution is disabled for security; use ExecutionModeContainer with ContainerRuntime instead", ErrSandboxNotAvailable)
+	}
+
 	result := &ExecutionResult{}
 
 	// Create temp file
@@ -355,6 +363,10 @@ func (r *BashRuntime) Available() bool {
 }
 
 func (r *BashRuntime) Execute(ctx context.Context, req *ExecutionRequest) (*ExecutionResult, error) {
+	if req.Mode != ExecutionModeContainer {
+		return nil, fmt.Errorf("%w: host-based code execution is disabled for security; use ExecutionModeContainer with ContainerRuntime instead", ErrSandboxNotAvailable)
+	}
+
 	result := &ExecutionResult{}
 
 	// Create temp file

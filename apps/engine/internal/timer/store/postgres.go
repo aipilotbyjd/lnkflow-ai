@@ -135,6 +135,7 @@ func (s *PostgresStore) GetDueTimers(ctx context.Context, shardID int32, fireTim
 		WHERE shard_id = $1 AND status = $2 AND fire_time <= $3
 		ORDER BY fire_time ASC
 		LIMIT $4
+		FOR UPDATE SKIP LOCKED
 	`, shardID, int16(timer.TimerStatusPending), fireTime, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get due timers: %w", err)
