@@ -52,6 +52,14 @@ func (s *MemoryEventStore) GetEvents(ctx context.Context, key types.ExecutionKey
 	return result, nil
 }
 
+func (s *MemoryEventStore) GetEventCount(ctx context.Context, key types.ExecutionKey) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	k := keyToString(key)
+	return int64(len(s.events[k])), nil
+}
+
 type MemoryMutableStateStore struct {
 	mu     sync.RWMutex
 	states map[executionKeyString]*engine.MutableState
@@ -85,4 +93,21 @@ func (s *MemoryMutableStateStore) UpdateMutableState(ctx context.Context, key ty
 	k := keyToString(key)
 	s.states[k] = state.Clone()
 	return nil
+}
+
+func (s *MemoryMutableStateStore) ListRunningExecutions(ctx context.Context) ([]types.ExecutionKey, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var keys []types.ExecutionKey
+	for _, state := range s.states {
+		if state.ExecutionInfo != nil && state.ExecutionInfo.Status == types.ExecutionStatusRunning {
+			keys = append(keys, types.ExecutionKey{
+				NamespaceID: state.ExecutionInfo.NamespaceID,
+				WorkflowID:  state.ExecutionInfo.WorkflowID,
+				RunID:       state.ExecutionInfo.RunID,
+			})
+		}
+	}
+	return keys, nil
 }

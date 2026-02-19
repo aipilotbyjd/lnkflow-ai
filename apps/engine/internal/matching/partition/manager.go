@@ -79,6 +79,21 @@ func (p *Partition) GetOrCreateTaskQueue(name string, kind engine.TaskQueueKind,
 	return tq
 }
 
+// GetOrCreateTaskQueueWithConfig creates a task queue with extended configuration options.
+func (p *Partition) GetOrCreateTaskQueueWithConfig(name string, kind engine.TaskQueueKind, rateLimit float64, burst int, cfg engine.TaskQueueConfig) *engine.TaskQueue {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if tq, exists := p.TaskQueues[name]; exists {
+		return tq
+	}
+
+	tq := engine.NewTaskQueueWithConfig(name, kind, rateLimit, burst, p.redisClient, cfg)
+	p.TaskQueues[name] = tq
+	p.LastActive = time.Now()
+	return tq
+}
+
 func (p *Partition) GetTaskQueue(name string) *engine.TaskQueue {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

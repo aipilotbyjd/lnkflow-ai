@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -13,7 +14,10 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const DefaultLeaseTimeout = 60 * time.Second
+const (
+	DefaultLeaseTimeout = 60 * time.Second
+	DefaultMaxRetries   = 3
+)
 
 var ErrTaskExists = errors.New("task already exists")
 
@@ -151,6 +155,16 @@ func (s *RedisTaskStore) Len(ctx context.Context) (int64, error) {
 	return s.client.LLen(ctx, s.queueKey).Result()
 }
 
+// TaskQueueConfig holds optional configuration for NewTaskQueue.
+type TaskQueueConfig struct {
+	DLQ            *DeadLetterQueue
+	MaxRetries     int32
+	Backpressure   *Backpressure
+	WAL            *WAL
+	StickyAffinity *StickyAffinity
+	Logger         *slog.Logger
+}
+
 type TaskQueue struct {
 	name           string
 	kind           TaskQueueKind
@@ -162,14 +176,58 @@ type TaskQueue struct {
 	inFlight       map[string]*Task
 	inFlightExpiry map[string]time.Time
 	leaseTimeout   time.Duration
+
+	// DLQ support
+	dlq        *DeadLetterQueue
+	maxRetries int32
+
+	// Backpressure support
+	backpressure *Backpressure
+
+	// WAL support
+	wal *WAL
+
+	// Sticky queue support
+	stickyAffinity *StickyAffinity
+
+	logger *slog.Logger
 }
 
+// NewTaskQueue creates a new TaskQueue. Maintains backward compatibility.
 func NewTaskQueue(name string, kind TaskQueueKind, rateLimit float64, burst int, redisClient *redis.Client) *TaskQueue {
+	return NewTaskQueueWithConfig(name, kind, rateLimit, burst, redisClient, TaskQueueConfig{})
+}
+
+// NewTaskQueueWithConfig creates a new TaskQueue with extended configuration.
+func NewTaskQueueWithConfig(name string, kind TaskQueueKind, rateLimit float64, burst int, redisClient *redis.Client, cfg TaskQueueConfig) *TaskQueue {
 	var store TaskStore
 	if redisClient != nil {
 		store = NewRedisTaskStore(redisClient, name)
 	} else {
-		store = NewMemoryTaskStore()
+		store = NewPriorityTaskStore()
+	}
+
+	logger := cfg.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	maxRetries := cfg.MaxRetries
+	if maxRetries <= 0 {
+		maxRetries = DefaultMaxRetries
+	}
+
+	bp := cfg.Backpressure
+	if bp == nil {
+		bp = NewBackpressure(DefaultSoftLimit, DefaultHardLimit, logger)
+	}
+
+	var sa *StickyAffinity
+	if kind == TaskQueueKindSticky {
+		sa = cfg.StickyAffinity
+		if sa == nil {
+			sa = NewStickyAffinity()
+		}
 	}
 
 	return &TaskQueue{
@@ -182,6 +240,12 @@ func NewTaskQueue(name string, kind TaskQueueKind, rateLimit float64, burst int,
 		inFlight:       make(map[string]*Task),
 		inFlightExpiry: make(map[string]time.Time),
 		leaseTimeout:   DefaultLeaseTimeout,
+		dlq:            cfg.DLQ,
+		maxRetries:     maxRetries,
+		backpressure:   bp,
+		wal:            cfg.WAL,
+		stickyAffinity: sa,
+		logger:         logger,
 	}
 }
 
@@ -201,21 +265,42 @@ func (tq *TaskQueue) AddTask(task *Task) error {
 	tq.mu.Lock()
 	defer tq.mu.Unlock()
 
-	// Check inFlight? No, just add to store.
-	// Redis handles dupes? No, List allows dupes. Ideally we check existence.
-	// For now, let's assume History service doesn't spam dupes.
+	// Backpressure check
+	depth, _ := tq.store.Len(context.Background())
+	if tq.backpressure != nil && tq.backpressure.ShouldReject(int(depth)) {
+		tq.metrics.TaskRejected()
+		return ErrBackpressure
+	}
 
 	tq.metrics.TaskAdded()
+
+	// Sticky affinity: bind workflow to any existing worker, or leave unbound
+	if tq.kind == TaskQueueKindSticky && tq.stickyAffinity != nil {
+		// If there's no existing affinity, the task is available to any worker.
+		// Affinity is established when Poll() dispatches the task.
+	}
 
 	// Try dispatch directly to waiting poller first (optimization)
 	if tq.tryDispatchLocked(task) {
 		return nil
 	}
 
-	// Persist to Store
+	// Persist to Store FIRST
 	if err := tq.store.AddTask(context.Background(), task); err != nil {
 		return err
 	}
+
+	// Write to WAL AFTER successful enqueue
+	if tq.wal != nil {
+		if err := tq.wal.WriteAdd(task); err != nil {
+			tq.logger.Error("failed to write WAL", slog.String("task_id", task.ID), slog.String("error", err.Error()))
+		}
+	}
+
+	// Update gauge metrics
+	newDepth, _ := tq.store.Len(context.Background())
+	tq.metrics.SetQueueDepth(newDepth)
+
 	return nil
 }
 
@@ -232,20 +317,6 @@ func (tq *TaskQueue) Poll(ctx context.Context, identity string) (*Task, error) {
 	}
 	tq.mu.Unlock()
 
-	// Polling logic:
-	// 1. Check Store (Blocking Poll if Redis)
-	// 2. If nothing, register as waiting poller?
-	// Redis BLPOP blocks, so we don't need 'pollers' list for waiting if using Redis.
-	// BUT, if using Memory, we do.
-	// AND, we have 'tryDispatchLocked' which pushes to 'pollers'.
-
-	// Hybrid approach:
-	// If Redis: BLPOP.
-	// If Memory: Check list, if empty, wait on chan.
-
-	// Simplification: Always use Store.PollTask
-	// But we need to handle context cancellation.
-
 	for {
 		task, err := tq.store.PollTask(ctx, time.Second)
 		if err != nil {
@@ -253,10 +324,37 @@ func (tq *TaskQueue) Poll(ctx context.Context, identity string) (*Task, error) {
 		}
 
 		if task != nil {
+			// Sticky queue: check affinity
+			if tq.kind == TaskQueueKindSticky && tq.stickyAffinity != nil {
+				boundIdentity, hasBind := tq.stickyAffinity.GetIdentity(task.WorkflowID)
+				if hasBind && boundIdentity != identity {
+					// Check if the affinity has expired (worker didn't poll in time)
+					if !tq.stickyAffinity.IsExpired(task.WorkflowID, tq.leaseTimeout) {
+						// Put task back and continue polling
+						_ = tq.store.AddTask(ctx, task)
+						if err := ctx.Err(); err != nil {
+							return nil, err
+						}
+						// Brief backoff to avoid busy-spinning
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+					// Affinity expired, allow any worker
+					tq.stickyAffinity.Remove(task.WorkflowID)
+				}
+				// Bind or refresh affinity
+				tq.stickyAffinity.Bind(task.WorkflowID, identity)
+			}
+
 			tq.mu.Lock()
 			tq.inFlight[task.ID] = task
 			tq.inFlightExpiry[task.ID] = time.Now().Add(tq.leaseTimeout)
+			tq.metrics.SetInFlightCount(int64(len(tq.inFlight)))
 			tq.mu.Unlock()
+
+			// Update queue depth gauge
+			depth, _ := tq.store.Len(context.Background())
+			tq.metrics.SetQueueDepth(depth)
 
 			tq.metrics.TaskDispatched()
 			tq.metrics.RecordLatency(time.Since(task.ScheduledTime))
@@ -276,6 +374,15 @@ func (tq *TaskQueue) CompleteTask(taskID string) bool {
 	if _, exists := tq.inFlight[taskID]; exists {
 		delete(tq.inFlight, taskID)
 		delete(tq.inFlightExpiry, taskID)
+		tq.metrics.SetInFlightCount(int64(len(tq.inFlight)))
+
+		// Write completion to WAL
+		if tq.wal != nil {
+			if err := tq.wal.WriteComplete(taskID); err != nil {
+				tq.logger.Error("failed to write WAL completion", slog.String("task_id", taskID), slog.String("error", err.Error()))
+			}
+		}
+
 		return true
 	}
 	// Task might be in store but not in flight?
@@ -284,7 +391,19 @@ func (tq *TaskQueue) CompleteTask(taskID string) bool {
 	if err != nil {
 		return false
 	}
+
+	if acked && tq.wal != nil {
+		if err := tq.wal.WriteComplete(taskID); err != nil {
+			tq.logger.Error("failed to write WAL completion", slog.String("task_id", taskID), slog.String("error", err.Error()))
+		}
+	}
+
 	return acked
+}
+
+// FailTask records a task failure in metrics.
+func (tq *TaskQueue) FailTask(taskID string) {
+	tq.metrics.TaskFailed()
 }
 
 func (tq *TaskQueue) tryDispatchLocked(task *Task) bool {
@@ -296,9 +415,15 @@ func (tq *TaskQueue) tryDispatchLocked(task *Task) bool {
 	poller := elem.Value.(*Poller)
 	tq.pollers.Remove(elem)
 
+	// Sticky affinity: bind the workflow to this poller's identity
+	if tq.kind == TaskQueueKindSticky && tq.stickyAffinity != nil {
+		tq.stickyAffinity.Bind(task.WorkflowID, poller.Identity)
+	}
+
 	task.StartedTime = time.Now()
 	tq.inFlight[task.ID] = task
 	tq.inFlightExpiry[task.ID] = time.Now().Add(tq.leaseTimeout)
+	tq.metrics.SetInFlightCount(int64(len(tq.inFlight)))
 	poller.ResultCh <- task
 
 	tq.metrics.TaskDispatched()
@@ -330,11 +455,42 @@ func (tq *TaskQueue) RequeueExpiredTasks() int {
 			delete(tq.inFlight, taskID)
 			delete(tq.inFlightExpiry, taskID)
 
-			// Re-add to store
-			go tq.store.AddTask(context.Background(), task)
+			tq.metrics.TaskTimedOut()
+
+			// Check if task has exceeded max retries
+			if tq.dlq != nil && task.Attempt >= tq.maxRetries {
+				entry := &DLQEntry{
+					Task:      task,
+					Reason:    "max retries exceeded",
+					FailedAt:  now,
+					Attempts:  task.Attempt,
+					LastError: "lease timeout",
+				}
+				if err := tq.dlq.Add(entry); err != nil {
+					tq.logger.Error("failed to add task to DLQ",
+						slog.String("task_id", taskID),
+						slog.String("error", err.Error()),
+					)
+				} else {
+					tq.metrics.TaskSentToDLQ()
+				}
+				continue
+			}
+
+			// Increment attempt on a copy and requeue synchronously
+			requeueTask := *task
+			requeueTask.Attempt++
+			if err := tq.store.AddTask(context.Background(), &requeueTask); err != nil {
+				tq.logger.Error("failed to requeue expired task",
+					slog.String("task_id", taskID),
+					slog.String("error", err.Error()),
+				)
+			}
 			requeued++
 		}
 	}
+
+	tq.metrics.SetInFlightCount(int64(len(tq.inFlight)))
 
 	return requeued
 }

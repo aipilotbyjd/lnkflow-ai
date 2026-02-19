@@ -1,10 +1,12 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -186,11 +188,25 @@ func (s *PostgresEventStore) DeleteEvents(ctx context.Context, key types.Executi
 	return nil
 }
 
+// GetEventCount returns the total number of events for an execution.
+func (s *PostgresEventStore) GetEventCount(ctx context.Context, key types.ExecutionKey) (int64, error) {
+	var count int64
+	err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM history_events
+		WHERE namespace_id = $1 AND workflow_id = $2 AND run_id = $3
+	`, key.NamespaceID, key.WorkflowID, key.RunID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get event count: %w", err)
+	}
+	return count, nil
+}
+
 // PostgresMutableStateStore implements MutableStateStore using PostgreSQL.
 type PostgresMutableStateStore struct {
 	pool       *pgxpool.Pool
 	serializer *mutableStateSerializer
 	shardCount int32
+	logger     *slog.Logger
 }
 
 type mutableStateSerializer struct{}
@@ -226,6 +242,7 @@ func NewPostgresMutableStateStore(pool *pgxpool.Pool, shardCount int32) *Postgre
 		pool:       pool,
 		serializer: &mutableStateSerializer{},
 		shardCount: shardCount,
+		logger:     slog.Default(),
 	}
 }
 
@@ -237,18 +254,31 @@ func (s *PostgresMutableStateStore) GetMutableState(
 	var data []byte
 	var nextEventID int64
 	var dbVersion int64
+	var storedChecksum []byte
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT state, next_event_id, db_version
+		SELECT state, next_event_id, db_version, checksum
 		FROM mutable_state
 		WHERE namespace_id = $1 AND workflow_id = $2 AND run_id = $3
-	`, key.NamespaceID, key.WorkflowID, key.RunID).Scan(&data, &nextEventID, &dbVersion)
+	`, key.NamespaceID, key.WorkflowID, key.RunID).Scan(&data, &nextEventID, &dbVersion, &storedChecksum)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, types.ErrExecutionNotFound
 		}
 		return nil, fmt.Errorf("failed to get mutable state: %w", err)
+	}
+
+	// Validate checksum if present
+	if len(storedChecksum) > 0 {
+		computed := calculateChecksum(data)
+		if !bytes.Equal(storedChecksum, computed) {
+			s.logger.Warn("mutable state checksum mismatch",
+				slog.String("namespace_id", key.NamespaceID),
+				slog.String("workflow_id", key.WorkflowID),
+				slog.String("run_id", key.RunID),
+			)
+		}
 	}
 
 	state, err := s.serializer.Deserialize(data)
@@ -346,6 +376,31 @@ func (s *PostgresMutableStateStore) DeleteMutableState(ctx context.Context, key 
 		return fmt.Errorf("failed to delete mutable state: %w", err)
 	}
 	return nil
+}
+
+// ListRunningExecutions returns execution keys for all running executions.
+func (s *PostgresMutableStateStore) ListRunningExecutions(ctx context.Context) ([]types.ExecutionKey, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT namespace_id, workflow_id, run_id FROM mutable_state
+		WHERE state->'ExecutionInfo'->>'Status' = '1'
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list running executions: %w", err)
+	}
+	defer rows.Close()
+
+	var keys []types.ExecutionKey
+	for rows.Next() {
+		var key types.ExecutionKey
+		if err := rows.Scan(&key.NamespaceID, &key.WorkflowID, &key.RunID); err != nil {
+			return nil, fmt.Errorf("failed to scan execution key: %w", err)
+		}
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating running executions: %w", err)
+	}
+	return keys, nil
 }
 
 // Helper functions

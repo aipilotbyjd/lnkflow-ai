@@ -2,8 +2,12 @@ package history
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,7 +15,9 @@ import (
 	commonv1 "github.com/linkflow/engine/api/gen/linkflow/common/v1"
 	historyv1 "github.com/linkflow/engine/api/gen/linkflow/history/v1"
 	matchingv1 "github.com/linkflow/engine/api/gen/linkflow/matching/v1"
+	"github.com/linkflow/engine/internal/history/archival"
 	"github.com/linkflow/engine/internal/history/engine"
+	"github.com/linkflow/engine/internal/history/ndc"
 	"github.com/linkflow/engine/internal/history/shard"
 	"github.com/linkflow/engine/internal/history/types"
 	"github.com/linkflow/engine/internal/history/visibility"
@@ -28,12 +34,14 @@ var (
 type EventStore interface {
 	AppendEvents(ctx context.Context, key types.ExecutionKey, events []*types.HistoryEvent, expectedVersion int64) error
 	GetEvents(ctx context.Context, key types.ExecutionKey, firstEventID, lastEventID int64) ([]*types.HistoryEvent, error)
+	GetEventCount(ctx context.Context, key types.ExecutionKey) (int64, error)
 }
 
 // MutableStateStore defines the interface for storing workflow mutable state.
 type MutableStateStore interface {
 	GetMutableState(ctx context.Context, key types.ExecutionKey) (*engine.MutableState, error)
 	UpdateMutableState(ctx context.Context, key types.ExecutionKey, state *engine.MutableState, expectedVersion int64) error
+	ListRunningExecutions(ctx context.Context) ([]types.ExecutionKey, error)
 }
 
 // ShardController manages shard ownership and distribution.
@@ -63,14 +71,19 @@ type Service struct {
 	shardController ShardController
 	eventStore      EventStore
 	stateStore      MutableStateStore
-	visibilityStore visibility.Store // Added visibility store
+	visibilityStore visibility.Store
 	matchingClient  matchingv1.MatchingServiceClient
 	historyEngine   *engine.Engine
+	snapshotStore   engine.SnapshotStore
+	archiver        *archival.Archiver
+	replicator      *ndc.Replicator
 	metrics         Metrics
 	logger          *slog.Logger
 
-	running bool
-	mu      sync.RWMutex
+	running    bool
+	mu         sync.RWMutex
+	wg         sync.WaitGroup
+	stopCh     chan struct{}
 }
 
 // Config holds configuration for the history service.
@@ -78,8 +91,11 @@ type Config struct {
 	ShardController ShardController
 	EventStore      EventStore
 	StateStore      MutableStateStore
-	VisibilityStore visibility.Store // Added visibility store
+	VisibilityStore visibility.Store
 	MatchingClient  matchingv1.MatchingServiceClient
+	SnapshotStore   engine.SnapshotStore // optional
+	Archiver        *archival.Archiver   // optional
+	Replicator      *ndc.Replicator      // optional
 	Logger          *slog.Logger
 	Metrics         Metrics
 }
@@ -117,7 +133,11 @@ func NewServiceWithConfig(cfg Config) *Service {
 		eventStore:      cfg.EventStore,
 		stateStore:      cfg.StateStore,
 		visibilityStore: cfg.VisibilityStore,
+		matchingClient:  cfg.MatchingClient,
 		historyEngine:   engine.NewEngine(cfg.Logger),
+		snapshotStore:   cfg.SnapshotStore,
+		archiver:        cfg.Archiver,
+		replicator:      cfg.Replicator,
 		metrics:         metrics,
 		logger:          cfg.Logger,
 		running:         false,
@@ -140,25 +160,34 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 	}
 
+	s.stopCh = make(chan struct{})
 	s.running = true
+
+	s.startTimeoutChecker()
+
 	return nil
 }
 
 func (s *Service) Stop(ctx context.Context) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if !s.running {
+		s.mu.Unlock()
 		return nil
 	}
 
 	s.logger.Info("stopping history service")
 
+	s.running = false
+	close(s.stopCh)
+	s.mu.Unlock()
+
+	s.wg.Wait()
+
 	if s.shardController != nil {
 		s.shardController.Stop()
 	}
 
-	s.running = false
 	return nil
 }
 
@@ -253,6 +282,55 @@ func (s *Service) processEvents(ctx context.Context, key types.ExecutionKey, eve
 				s.logger.Error("failed to dispatch tasks to matching", "error", err)
 			}
 		}
+	}
+
+	// Save snapshot every 100 events (Feature 7)
+	if s.snapshotStore != nil && state.NextEventID%100 == 0 {
+		snapshot := &engine.Snapshot{
+			ExecutionKey: key,
+			State:        state.Clone(),
+			LastEventID:  state.NextEventID - 1,
+			CreatedAt:    time.Now(),
+		}
+		if err := s.snapshotStore.SaveSnapshot(ctx, snapshot); err != nil {
+			s.logger.Warn("failed to save snapshot", "error", err, "workflow_id", key.WorkflowID)
+		}
+	}
+
+	// Archival on execution close (Feature 8)
+	if s.archiver != nil {
+		for _, event := range events {
+			if event.EventType == types.EventTypeExecutionCompleted || event.EventType == types.EventTypeExecutionFailed {
+				allEvents, err := s.eventStore.GetEvents(ctx, key, 1, state.NextEventID-1)
+				if err != nil {
+					s.logger.Warn("failed to fetch events for archival", "error", err, "workflow_id", key.WorkflowID)
+					break
+				}
+				if err := s.archiver.Archive(ctx, &archival.ArchiveRequest{
+					NamespaceID: key.NamespaceID,
+					ExecutionID: key.RunID,
+					WorkflowID:  key.WorkflowID,
+					Events:      allEvents,
+					ClosedAt:    event.Timestamp,
+				}); err != nil {
+					s.logger.Warn("failed to archive execution", "error", err, "workflow_id", key.WorkflowID)
+				}
+				break
+			}
+		}
+	}
+
+	// NDC Replication (Feature 12) - async so it doesn't block
+	if s.replicator != nil {
+		replicateEvents := make([]*types.HistoryEvent, len(events))
+		copy(replicateEvents, events)
+		go func() {
+			replicateCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := s.replicator.ReplicateEvents(replicateCtx, key.WorkflowID, replicateEvents); err != nil {
+				s.logger.Warn("failed to replicate events", "error", err, "workflow_id", key.WorkflowID)
+			}
+		}()
 	}
 
 	return nil
@@ -538,7 +616,88 @@ func (s *Service) GetShardIDForExecution(key types.ExecutionKey) int32 {
 }
 
 func (s *Service) ResetExecution(ctx context.Context, key types.ExecutionKey, reason string, resetEventID int64) (string, error) {
-	return "", errors.New("reset execution not implemented")
+	// 1. Fetch events up to resetEventID
+	events, err := s.eventStore.GetEvents(ctx, key, 1, resetEventID)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch events for reset: %w", err)
+	}
+	if len(events) == 0 {
+		return "", fmt.Errorf("no events found up to event ID %d", resetEventID)
+	}
+
+	// Validate first event is ExecutionStarted
+	firstEvent := events[0]
+	if firstEvent.EventType != types.EventTypeExecutionStarted {
+		return "", fmt.Errorf("first event is not ExecutionStarted")
+	}
+
+	// 2. Generate new RunID
+	newRunID := generateRunID()
+
+	// 3. Replay events up to reset point into new MutableState
+	newKey := types.ExecutionKey{
+		NamespaceID: key.NamespaceID,
+		WorkflowID:  key.WorkflowID,
+		RunID:       newRunID,
+	}
+
+	newState := engine.NewMutableState(&types.ExecutionInfo{
+		NamespaceID: newKey.NamespaceID,
+		WorkflowID:  newKey.WorkflowID,
+		RunID:       newKey.RunID,
+	})
+
+	// Re-assign event IDs and replay
+	replayedEvents := make([]*types.HistoryEvent, len(events))
+	for i, evt := range events {
+		clone := *evt
+		clone.EventID = int64(i + 1)
+		if err := newState.ApplyEvent(&clone); err != nil {
+			return "", fmt.Errorf("failed to replay event %d during reset: %w", clone.EventID, err)
+		}
+		replayedEvents[i] = &clone
+	}
+
+	// 4. Persist the new execution's events
+	if err := s.eventStore.AppendEvents(ctx, newKey, replayedEvents, 0); err != nil {
+		return "", fmt.Errorf("failed to persist reset events: %w", err)
+	}
+
+	// 5. Persist the new execution's mutable state
+	if err := s.stateStore.UpdateMutableState(ctx, newKey, newState, 0); err != nil {
+		return "", fmt.Errorf("failed to persist reset state: %w", err)
+	}
+
+	// 6. Dispatch a WorkflowTask to Matching so the decider picks it up
+	if s.matchingClient != nil && newState.ExecutionInfo != nil && newState.ExecutionInfo.TaskQueue != "" {
+		taskReq := &matchingv1.AddTaskRequest{
+			Namespace: newKey.NamespaceID,
+			TaskQueue: &matchingv1.TaskQueue{
+				Name: newState.ExecutionInfo.TaskQueue,
+				Kind: commonv1.TaskQueueKind_TASK_QUEUE_KIND_NORMAL,
+			},
+			TaskType: commonv1.TaskType_TASK_TYPE_WORKFLOW_TASK,
+			WorkflowExecution: &commonv1.WorkflowExecution{
+				WorkflowId: newKey.WorkflowID,
+				RunId:      newKey.RunID,
+			},
+			ScheduledEventId: newState.NextEventID - 1,
+		}
+		if _, err := s.matchingClient.AddTask(ctx, taskReq); err != nil {
+			s.logger.Warn("failed to dispatch workflow task after reset", "error", err, "workflow_id", newKey.WorkflowID)
+		}
+	}
+
+	s.logger.Info("execution reset completed",
+		slog.String("workflow_id", key.WorkflowID),
+		slog.String("old_run_id", key.RunID),
+		slog.String("new_run_id", newRunID),
+		slog.String("reason", reason),
+		slog.Int64("reset_event_id", resetEventID),
+	)
+
+	// 7. Return the new RunID
+	return newRunID, nil
 }
 
 func (s *Service) ListWorkflowExecutions(ctx context.Context, req *historyv1.ListWorkflowExecutionsRequest) (*historyv1.ListWorkflowExecutionsResponse, error) {
@@ -578,4 +737,145 @@ func (s *Service) ListWorkflowExecutions(ctx context.Context, req *historyv1.Lis
 		Executions:    executions,
 		NextPageToken: resp.NextPageToken,
 	}, nil
+}
+
+// GetHistoryPageRequest is the request for paginated history retrieval.
+type GetHistoryPageRequest struct {
+	Key       types.ExecutionKey
+	PageSize  int32
+	PageToken string // base64 encoded last event ID
+}
+
+// GetHistoryPageResponse is the response for paginated history retrieval.
+type GetHistoryPageResponse struct {
+	Events        []*types.HistoryEvent
+	NextPageToken string
+	TotalEvents   int64
+}
+
+// GetHistoryPage returns a paginated view of the execution history.
+func (s *Service) GetHistoryPage(ctx context.Context, req *GetHistoryPageRequest) (*GetHistoryPageResponse, error) {
+	if req.PageSize <= 0 {
+		req.PageSize = 100
+	}
+
+	// Decode page token to get startEventID
+	var startEventID int64 = 1
+	if req.PageToken != "" {
+		tokenBytes, err := base64.StdEncoding.DecodeString(req.PageToken)
+		if err != nil {
+			return nil, fmt.Errorf("invalid page token: %w", err)
+		}
+		lastID, err := strconv.ParseInt(string(tokenBytes), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid page token value: %w", err)
+		}
+		startEventID = lastID + 1
+	}
+
+	// Fetch pageSize+1 events to determine if there's a next page
+	fetchSize := int64(req.PageSize) + 1
+	events, err := s.eventStore.GetEvents(ctx, req.Key, startEventID, startEventID+fetchSize-1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events: %w", err)
+	}
+
+	// Get total count
+	totalEvents, err := s.eventStore.GetEventCount(ctx, req.Key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get event count: %w", err)
+	}
+
+	resp := &GetHistoryPageResponse{
+		TotalEvents: totalEvents,
+	}
+
+	if int32(len(events)) > req.PageSize {
+		// There's a next page
+		resp.Events = events[:req.PageSize]
+		lastEvent := resp.Events[len(resp.Events)-1]
+		resp.NextPageToken = base64.StdEncoding.EncodeToString(
+			[]byte(strconv.FormatInt(lastEvent.EventID, 10)),
+		)
+	} else {
+		resp.Events = events
+	}
+
+	return resp, nil
+}
+
+// startTimeoutChecker launches a background goroutine that checks for execution timeouts.
+func (s *Service) startTimeoutChecker() {
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-s.stopCh:
+				return
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				s.checkExecutionTimeouts(ctx)
+				cancel()
+			}
+		}
+	}()
+}
+
+// checkExecutionTimeouts checks running executions for timeout violations.
+func (s *Service) checkExecutionTimeouts(ctx context.Context) {
+	keys, err := s.stateStore.ListRunningExecutions(ctx)
+	if err != nil {
+		s.logger.Warn("failed to list running executions for timeout check", "error", err)
+		return
+	}
+
+	for _, key := range keys {
+		state, err := s.stateStore.GetMutableState(ctx, key)
+		if err != nil {
+			s.logger.Warn("failed to get state for timeout check", "error", err, "workflow_id", key.WorkflowID)
+			continue
+		}
+
+		if state.ExecutionInfo == nil || state.ExecutionInfo.ExecutionTimeout <= 0 {
+			continue
+		}
+
+		if time.Since(state.ExecutionInfo.StartTime) > state.ExecutionInfo.ExecutionTimeout {
+			s.logger.Info("execution timeout exceeded, terminating",
+				slog.String("workflow_id", key.WorkflowID),
+				slog.String("run_id", key.RunID),
+			)
+
+			terminateEvent := &types.HistoryEvent{
+				EventType: types.EventTypeExecutionTerminated,
+				Timestamp: time.Now(),
+				Attributes: &types.ExecutionTerminatedAttributes{
+					Reason:   "execution timeout exceeded",
+					Identity: "system-timeout-checker",
+				},
+			}
+
+			if err := s.processEvents(ctx, key, []*types.HistoryEvent{terminateEvent}); err != nil {
+				s.logger.Warn("failed to terminate timed-out execution", "error", err, "workflow_id", key.WorkflowID)
+			}
+		}
+	}
+}
+
+// generateRunID generates a new unique run ID.
+func generateRunID() string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("run-%d", time.Now().UnixNano())
+	}
+	for i := range b {
+		b[i] = letters[int(b[i])%len(letters)]
+	}
+	return "run-" + string(b)
 }
