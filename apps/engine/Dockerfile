@@ -37,7 +37,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
 # ============================================
 # Runtime Stage
 # ============================================
-FROM alpine:3.19
+FROM alpine:3.23
 
 ARG SERVICE=frontend
 
